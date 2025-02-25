@@ -40,23 +40,8 @@ exports.submitAttendance = async (req, res) => {
       return res.status(400).json({ message: 'All fields are required' });
     }
     
-    // Check if attendance for this subject, date, semester already exists
-    const existingAttendance = await Attendance.findOne({
-      course,
-      semester,
-      subject,
-      date: new Date(date)
-    }).session(session);
-    
-    if (existingAttendance) {
-      await session.abortTransaction();
-      session.endSession();
-      return res.status(400).json({ 
-        message: 'Attendance for this subject and date already exists' 
-      });
-    }
-    
     // Create new attendance record
+    // No need to check for existing records - we'll allow multiple entries for the same date
     const newAttendance = new Attendance({
       course,
       semester,
