@@ -18,7 +18,7 @@ const attendanceSchema = new mongoose.Schema({
   course: {
     type: String,
     required: true,
-    enum: ['MTECH', 'MCA']
+    enum: ['MTECH', 'MCA','MBA(MS)','MBA(ESHIP)','MBA(APR)','MBA(TM)','MBA(FT)','BCOM']
   },
   semester: {
     type: String,

@@ -3,7 +3,7 @@ const studentSchema = new mongoose.Schema({
     className: {
       type: String,
       required: true,
-      enum: ['MTECH', 'MCA']
+      enum: ['MTECH', 'MCA','MBA(MS)','MBA(ESHIP)','MBA(APR)','MBA(TM)','MBA(FT)','BCOM']
     },
     semester: {
       type: String,
@@ -12,7 +12,6 @@ const studentSchema = new mongoose.Schema({
     email: {
       type: String,
       required: true,
-      unique: true,
       lowercase: true
     },
     fullName: {
@@ -27,7 +26,6 @@ const studentSchema = new mongoose.Schema({
     enrollmentNumber: {
       type: String,
       required: true,
-      unique: true
     },
     phoneNumber: {
       type: String,
@@ -44,4 +42,3 @@ const studentSchema = new mongoose.Schema({
   }, { collection: 'Students' });
   
   module.exports = mongoose.model('Students', studentSchema);
-  
