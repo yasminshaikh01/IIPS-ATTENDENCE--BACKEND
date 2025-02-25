@@ -99,44 +99,9 @@ const login = async (req, res) => {
       return res.status(400).json({ error: "Invalid password" });
     }
 
-    const otp = Math.floor(100000 + Math.random() * 900000); // Generate OTP
-    const otpExpiry = Date.now() + 10 * 60 * 1000; // OTP expires in 10 minutes
-
-    // Store the OTP and expiry in the database
-    teacher.otp = otp;
-    teacher.otpExpiry = otpExpiry;
-    await teacher.save();
-
-    await sendOtpToEmail(email, otp);
-
-    res.status(200).json({ message: "OTP sent successfully" });
-  } catch (error) {
-    res.status(500).json({ error: "Server error" });
-  }
-};
-
-const verifyOtp = async (req, res) => {
-  const { email, otp } = req.body;
-
-  try {
-    const teacher = await Teacher.findOne({ email });
-
-    if (!teacher) {
-      return res.status(404).json({ error: "Teacher not found" });
-    }
-
-    // Check if OTP matches and is not expired
-    if (teacher.otp !== otp || Date.now() > teacher.otpExpiry) {
-      return res.status(400).json({ error: "Invalid or expired OTP" });
-    }
-
-    // Clear OTP and OTP expiry after successful verification
-    teacher.otp = null;
-    teacher.otpExpiry = null;
-
     // Generate session ID and set expiry to 6 hours from now
     const sessionId = crypto.randomBytes(16).toString("hex");
-    const expiresAt = new Date(Date.now() + 6 * 60 * 60 * 1000); // 6 hours from now
+    const expiresAt = new Date(Date.now() + 8 * 60 * 60 * 1000); // 8 hours from now
 
     teacher.sessions.push({ sessionId, expiresAt });
     await teacher.save();
@@ -154,6 +119,46 @@ const verifyOtp = async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 };
+
+// const verifyOtp = async (req, res) => {
+//   const { email, otp } = req.body;
+
+//   try {
+//     const teacher = await Teacher.findOne({ email });
+
+//     if (!teacher) {
+//       return res.status(404).json({ error: "Teacher not found" });
+//     }
+
+//     // Check if OTP matches and is not expired
+//     if (teacher.otp !== otp || Date.now() > teacher.otpExpiry) {
+//       return res.status(400).json({ error: "Invalid or expired OTP" });
+//     }
+
+//     // Clear OTP and OTP expiry after successful verification
+//     teacher.otp = null;
+//     teacher.otpExpiry = null;
+
+//     // Generate session ID and set expiry to 6 hours from now
+//     const sessionId = crypto.randomBytes(16).toString("hex");
+//     const expiresAt = new Date(Date.now() + 6 * 60 * 60 * 1000); // 6 hours from now
+
+//     teacher.sessions.push({ sessionId, expiresAt });
+//     await teacher.save();
+
+//     res.status(200).json({
+//       message: "Login successful",
+//       sessionId,
+//       teacherId: teacher._id,
+//       name: teacher.name,
+//       email: teacher.email,
+//       mobileNumber: teacher.mobileNumber,
+//       photo: teacher.photo,
+//     });
+//   } catch (error) {
+//     res.status(500).json({ error: "Server error" });
+//   }
+// };
 
 const verifySession = async (req, res) => {
   const { sessionId } = req.body;
@@ -271,7 +276,7 @@ const getTeacherDetailsById = async (req, res) => {
 
 module.exports = {
   login,
-  verifyOtp,
+  // verifyOtp,
   verifySession,
   signUp,
   verifyOtppasscode,
