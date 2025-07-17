@@ -1,44 +1,46 @@
 const mongoose = require('mongoose');
+
+// Academic year default like "2025-26"
+const getCurrentAcademicYear = () => {
+  const year = new Date().getFullYear();
+  return `${year}-${(year + 1).toString().slice(-2)}`;
+};
+
 const studentSchema = new mongoose.Schema({
-    className: {
-      type: String,
-      required: true,
-      enum: ['MTECH', 'MCA','MBA(MS)','MBA(ESHIP)','MBA(APR)','MBA(TM)','MBA(FT)','BCOM']
-    },
-    semester: {
-      type: String,
-      required: true
-    },
-    email: {
-      type: String,
-      required: true,
-      lowercase: true
-    },
-    fullName: {
-      type: String,
-      required: true
-    },
-    rollNumber: {
-      type: String,
-      required: true,
-      unique: true
-    },
-    enrollmentNumber: {
-      type: String,
-      required: true,
-    },
-    phoneNumber: {
-      type: String,
-      required: true
-    },
-    password: {
-      type: String,
-      required: true
-    },
-    createdAt: {
-      type: Date,
-      default: Date.now
-    }
-  }, { collection: 'Students' });
-  
-  module.exports = mongoose.model('Students', studentSchema);
+  rollNumber: {
+    type: String,
+    required: true,
+    unique: true
+  },
+  fullName: {
+    type: String,
+    required: true
+  },
+  courseId: {
+    type: String,
+    required: true
+  },
+  semId: {
+    type: String,
+    required: true
+  },
+  specialization: {
+    type: String
+  },
+  email: {
+    type: String,
+    lowercase: true
+  },
+  section: {
+    type: String,
+  },
+  phoneNumber: {
+    type: String
+  },
+  academicYear: {
+    type: String,
+    default: getCurrentAcademicYear
+  }
+}, { collection: 'Students' });
+
+module.exports = mongoose.model('Students', studentSchema);

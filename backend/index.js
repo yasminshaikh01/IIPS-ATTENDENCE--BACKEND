@@ -8,6 +8,7 @@ require("dotenv").config();
 const { removeExpiredSessions } = require("./utils/sessionCleanup");
 
 
+
 const app = express();
 
 // Add CORS middleware
@@ -39,10 +40,11 @@ app.use(
     cookie: { secure: false }, 
   })
 );
+
 app.use("/teacher", TeacherRoutes);
 app.use("/attendance",AttendanceRoutes );
 //cleaning session
-setInterval(removeExpiredSessions, 30 * 60 * 1000); // every 30 min
+//setInterval(removeExpiredSessions, 30 * 60 * 1000); // every 30 min
 
 const port = process.env.PORT || 5000;
 app.listen(port, () => {

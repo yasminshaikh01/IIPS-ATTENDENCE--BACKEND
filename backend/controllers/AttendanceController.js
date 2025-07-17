@@ -3,23 +3,61 @@ const Student = require('../models/Student');
 const Attendance = require('../models/Attendance');
 const AttendanceSummary = require('../models/AttendanceSummary');
 const mongoose = require('mongoose');
+const Course = require('../models/Course');
+const Subject = require('../models/Subject');
 const emailService = require('../config/nodemailer');
+
+// Get all subjects for a course and semester
+exports.getSubjects = async (req, res) => {
+  const { course, semester } = req.body;
+
+  if (!course || !semester) {
+    return res.status(400).json({ message: 'Course and semester are required' });
+  }
+
+  try {
+    // Find course by Course_Name to get Course_ID
+    const courseDoc = await Course.findOne({ Course_Name: course });
+    if (!courseDoc) {
+      return res.status(404).json({ message: 'Course not found' });
+    }
+
+    const subjects = await Subject.find({
+      Course_ID: courseDoc.Course_Id,
+      Sem_Id: semester
+    });
+
+    res.status(200).json(subjects);
+  } catch (err) {
+    console.error('Error fetching subjects:', err);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+};
 
 // Get students by course and semester
 exports.getStudentsByCourseAndSemester = async (req, res) => {
-    
   try {
-    const { className, semester } = req.body;
-    
-    if (!className || !semester) {
-      return res.status(400).json({ message: 'Course and semester are required' });
+    const { className, semester_id } = req.body;
+
+    if (!className || !semester_id) {
+      return res.status(400).json({ message: 'Class name and semester ID are required' });
     }
-    
+
+    // Step 1: Find the course using className (Course_Name)
+    const course = await Course.findOne({ 
+      Course_Name: className 
+    });
+
+    if (!course) {
+      return res.status(404).json({ message: 'Course not found' });
+    }
+
+    // Step 2: Use Course_Id and semester_id to find students
     const students = await Student.find({ 
-      className,
-      semester
+      Course_Id: course.Course_Id,
+      Sem_Id: semester_id
     }).sort({ fullName: 1 });
-    
+
     return res.status(200).json(students);
   } catch (error) {
     console.error('Error fetching students:', error);
