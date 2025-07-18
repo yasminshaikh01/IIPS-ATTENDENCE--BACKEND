@@ -1,46 +1,24 @@
+// Attendance.js
 const mongoose = require('mongoose');
 
-// Individual attendance record schema
-const attendanceRecordSchema = new mongoose.Schema({
+const attendanceSchema = new mongoose.Schema({
   studentId: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Student',
+    ref: 'Students',
     required: true
   },
-  present: {
-    type: Boolean,
-    default: true
-  }
-});
+  subjectCode: {
+    type: String,
+    required: true
+  },
+  records: [
+    {
+      date: { type: Date, required: true },
+      present: { type: Boolean, required: true }
+    }
+  ]
+}, { timestamps: true });
 
-// Main attendance schema
-const attendanceSchema = new mongoose.Schema({
-  course: {
-    type: String,
-    required: true,
-    enum: ['MTECH', 'MCA','MBA(MS)','MBA(ESHIP)','MBA(APR)','MBA(TM)','MBA(FT)','BCOM']
-  },
-  semester: {
-    type: String,
-    required: true
-  },
-  subject: {
-    type: String,
-    required: true
-  },
-  date: {
-    type: Date,
-    required: true
-  },
-  records: [attendanceRecordSchema],
-  createdAt: {
-    type: Date,
-    default: Date.now
-  },
-  createdBy: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User'
-  }
-});
+attendanceSchema.index({ studentId: 1, subjectCode: 1 }); // fast lookup
 
 module.exports = mongoose.model('Attendance', attendanceSchema);

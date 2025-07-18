@@ -6,15 +6,15 @@ const attendanceSummarySchema = new mongoose.Schema({
     ref: 'Student',
     required: true
   },
-  course: {
+  courseId: {
     type: String,
     required: true
   },
-  semester: {
+  semId: {
     type: String,
     required: true
   },
-  subject: {
+  subjectCode: {
     type: String,
     required: true
   },
@@ -40,9 +40,9 @@ const attendanceSummarySchema = new mongoose.Schema({
   }
 });
 
-// Compound index to ensure a student has only one summary per subject per semester
+// ✅ Correct compound index
 attendanceSummarySchema.index(
-  { studentId: 1, subject: 1, semester: 1, academicYear: 1 },
+  { studentId: 1, courseId: 1, semId: 1, subjectCode: 1, academicYear: 1 },
   { unique: true }
 );
 
