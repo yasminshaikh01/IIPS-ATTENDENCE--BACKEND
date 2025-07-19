@@ -9,24 +9,31 @@ const emailService = require('../config/nodemailer');
 
 // Get all subjects for a course and semester
 exports.getSubjects = async (req, res) => {
-  const { course, semester } = req.body;
+  const { course, semester, specialization } = req.body;
 
   if (!course || !semester) {
     return res.status(400).json({ message: 'Course and semester are required' });
   }
 
   try {
-    // Find course by Course_Name to get Course_ID
+    // Find course by Course_Name to get Course_Id
     const courseDoc = await Course.findOne({ Course_Name: course });
     if (!courseDoc) {
       return res.status(404).json({ message: 'Course not found' });
     }
 
-    const subjects = await Subject.find({
+    // Build the query
+    const query = {
       Course_ID: courseDoc.Course_Id,
       Sem_Id: semester
-    });
+    };
 
+    // Add specialization if provided
+    if (specialization) {
+      query.Specialization = specialization;
+    }
+
+    const subjects = await Subject.find(query);
     res.status(200).json(subjects);
   } catch (err) {
     console.error('Error fetching subjects:', err);
@@ -35,28 +42,44 @@ exports.getSubjects = async (req, res) => {
 };
 
 // Get students by course and semester
+// Get students by course and semester
 exports.getStudentsByCourseAndSemester = async (req, res) => {
   try {
-    const { className, semester_id } = req.body;
+    const { className, semester_id, specialization, section } = req.body;
 
     if (!className || !semester_id) {
       return res.status(400).json({ message: 'Class name and semester ID are required' });
     }
 
     // Step 1: Find the course using className (Course_Name)
-    const course = await Course.findOne({ 
-      Course_Name: className 
-    });
+    const course = await Course.findOne({ Course_Name: className });
 
     if (!course) {
       return res.status(404).json({ message: 'Course not found' });
     }
-   console.log('Course found:', course.Course_Id, 'for className:', className ,semester_id);
-    // Step 2: Use Course_Id and semester_id to find students
-    const students = await Student.find({ 
+
+    console.log('Course found:', course.Course_Id, 'for className:', className, semester_id);
+
+    // Step 2: Build the query
+    const query = {
       courseId: course.Course_Id,
       semId: semester_id
-    }).sort({ fullName: 1 });
+    };
+
+    // Step 3: Add specialization condition if provided
+    if (specialization && specialization.trim() !== '') {
+      query.specializations = { $in: [specialization] }; // Check if specialization exists in array
+    }
+
+    // Step 4: Add section condition if provided
+    if (section && section.trim() !== '') {
+      query.section = section;
+    }
+
+    console.log('Final query:', JSON.stringify(query));
+
+    // Step 5: Fetch and return students
+    const students = await Student.find(query).sort({ rollNumber: 1 });
 
     return res.status(200).json(students);
   } catch (error) {
@@ -65,54 +88,84 @@ exports.getStudentsByCourseAndSemester = async (req, res) => {
   }
 };
 
-
 // Submit new attendance
 const getCurrentAcademicYear = () => {
   const year = new Date().getFullYear();
   return `${year}-${(year + 1).toString().slice(-2)}`;
 };
 
-
 exports.submitAttendance = async (req, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();
 
   try {
-    const { courseName, semId, subjectCode, date, attendance } = req.body;
+    const { courseName, semId, subjectCode, date, attendance, specialization, section } = req.body;
 
     if (!courseName || !semId || !subjectCode || !date || !attendance) {
       return res.status(400).json({ message: 'All fields are required' });
     }
+
     const course = await Course.findOne({ 
       Course_Name: courseName 
     });
     const courseId = course ? course.Course_Id : null;
-console.log('Received attendance data:', courseId, semId, subjectCode, date, attendance);
+    
+    console.log('Received attendance data:', {
+      courseId, 
+      semId, 
+      subjectCode, 
+      date, 
+      specialization, 
+      section,
+      attendanceCount: attendance.length
+    });
+
     const academicYear = getCurrentAcademicYear();
 
     for (const record of attendance) {
       const { studentId, present } = record;
       if (!studentId) continue;
-console.log('Processing attendance for student:', studentId, 'Present:', present);
-      // Store attendance detail
-     await Attendance.updateOne(
-  {
-    studentId,
-    subjectCode
-  },
-  {
-    $setOnInsert: { studentId, subjectCode }, // ensures document is created
-    $push: {
-      records: {
-        date: new Date(date),
-        present
-      }
-    }
-  },
-  { upsert: true, session }
-);
 
-console.log('Attendance record updated for student:', studentId);
+      console.log('Processing attendance for student:', studentId, 'Present:', present);
+
+      // Verify student exists and matches optional filters
+      const studentQuery = { _id: studentId };
+      
+      if (specialization && specialization.trim() !== '') {
+        studentQuery.specializations = { $in: [specialization] };
+      }
+      
+      if (section && section.trim() !== '') {
+        studentQuery.section = section;
+      }
+
+      const studentExists = await Student.findOne(studentQuery).session(session);
+      
+      if (!studentExists) {
+        console.log(`Student ${studentId} not found or doesn't match filters. Skipping.`);
+        continue;
+      }
+
+      // Store attendance detail
+      await Attendance.updateOne(
+        {
+          studentId,
+          subjectCode
+        },
+        {
+          $setOnInsert: { studentId, subjectCode },
+          $push: {
+            records: {
+              date: new Date(date),
+              present
+            }
+          }
+        },
+        { upsert: true, session }
+      );
+
+      console.log('Attendance record updated for student:', studentId);
+
       // Update or create summary
       let summary = await AttendanceSummary.findOne({
         studentId,
@@ -121,7 +174,9 @@ console.log('Attendance record updated for student:', studentId);
         subjectCode,
         academicYear
       }).session(session);
-console.log('Attendance summary found:', summary ? 'Yes' : 'No', 'for student:', studentId);
+
+      console.log('Attendance summary found:', summary ? 'Yes' : 'No', 'for student:', studentId);
+
       if (!summary) {
         summary = new AttendanceSummary({
           studentId,
@@ -158,25 +213,42 @@ console.log('Attendance summary found:', summary ? 'Yes' : 'No', 'for student:',
   }
 };
 
-// New controller method to get attendance by course, semester, subject, and academic year
+// Get attendance by course, semester, subject, and academic year with optional filters
 exports.getAttendanceByCourseAndSubject = async (req, res) => {
   try {
-    const { course, semester, subject, academicYear } = req.body;
-    console.log('Query params:', { course, semester, subject, academicYear });
+    const { course, semester, subject, academicYear, specialization, section } = req.body;
+    console.log('Query params:', { course, semester, subject, academicYear, specialization, section });
 
-    // Step 1: Fetch students for the given course and semester
-    const students = await Student.find({
+    // Step 1: Build student query
+    const studentQuery = {
       courseId: course,
       semId: semester
-    });
+    };
+
+    // Add optional filters
+    if (specialization && specialization.trim() !== '') {
+      studentQuery.specializations = { $in: [specialization] };
+    }
+
+    if (section && section.trim() !== '') {
+      studentQuery.section = section;
+    }
+
+    console.log('Student query:', JSON.stringify(studentQuery));
+
+    // Step 2: Fetch students for the given course and semester with filters
+    const students = await Student.find(studentQuery);
 
     if (students.length === 0) {
-      return res.status(404).json({ message: 'No students found for this course and semester' });
+      return res.status(404).json({ 
+        message: 'No students found for this course, semester, and filters',
+        filters: { course, semester, specialization, section }
+      });
     }
 
     const attendanceSummaries = [];
 
-    // Step 2: For each student, fetch their attendance record
+    // Step 3: For each student, fetch their attendance record
     for (const student of students) {
       const attendanceDoc = await Attendance.findOne({
         studentId: student._id,
@@ -186,9 +258,11 @@ exports.getAttendanceByCourseAndSubject = async (req, res) => {
       let attended = 0;
       const total = attendanceDoc?.records?.length || 0;
 
-      attendanceDoc?.records?.forEach(record => {
-        if (record.present) attended++;
-      });
+      if (attendanceDoc?.records) {
+        attendanceDoc.records.forEach(record => {
+          if (record.present) attended++;
+        });
+      }
 
       console.log(`Attendance for student ${student.fullName} (${student._id}): ${attended}/${total}`);
 
@@ -198,6 +272,8 @@ exports.getAttendanceByCourseAndSubject = async (req, res) => {
         rollNumber: student.rollNumber,
         courseId: student.courseId,
         semId: student.semId,
+        specializations: student.specializations || [],
+        section: student.section || '',
         subjectCode: subject,
         academicYear,
         classesAttended: attended,
@@ -206,43 +282,63 @@ exports.getAttendanceByCourseAndSubject = async (req, res) => {
       });
     }
 
-    return res.status(200).json(attendanceSummaries);
+    // Sort by roll number
+    attendanceSummaries.sort((a, b) => {
+      return a.rollNumber.localeCompare(b.rollNumber, undefined, { numeric: true });
+    });
+
+    return res.status(200).json({
+      students: attendanceSummaries,
+      totalStudents: attendanceSummaries.length,
+      filters: { course, semester, subject, academicYear, specialization, section }
+    });
   } catch (error) {
     console.error('Error fetching attendance by course and subject:', error);
     return res.status(500).json({ message: 'Server error' });
   }
 };
 
-
 exports.getStudentAttendanceDetail = async (req, res) => {
   try {
-    const { studentId, subject, semester, academicYear } = req.params;
+    const { studentId, subject } = req.params;
 
-    console.log('Query params:', { studentId, subject, semester, academicYear });
-
-    const query = {
-      studentId: new mongoose.Types.ObjectId(studentId), // Important: convert string to ObjectId
-      subjectCode: subject.trim()                        // Remove accidental whitespace
-    };
-
-    console.log('MongoDB query:', JSON.stringify(query));
-
-    const attendanceDoc = await Attendance.findOne(query);
-
-    if (!attendanceDoc || !attendanceDoc.records || attendanceDoc.records.length === 0) {
-      console.log("No attendance records found");
-      return res.status(404).json({ 
-        message: 'No attendance records found',
-        query
-      });
+    if (!mongoose.Types.ObjectId.isValid(studentId)) {
+      console.error('Invalid student ID:', studentId);
+      return res.status(400).json({ message: 'Invalid student ID' });
     }
 
-    const formattedRecords = attendanceDoc.records.map(record => ({
-      date: record.date,
-      present: record.present
-    }));
+    // Build MongoDB query based only on existing fields
+    const query = {
+      studentId: new mongoose.Types.ObjectId(studentId),
+      subjectCode: subject.trim(),
+    };
+
+    console.log('Searching attendance with query:', JSON.stringify(query, null, 2));
+
+    // Check if student exists
+    const student = await Student.findById(studentId);
+    if (!student) {
+      return res.status(404).json({ message: 'Student not found' });
+    }
+
+    // Fetch attendance document
+    const attendanceDoc = await Attendance.findOne(query);
+
+    if (!attendanceDoc || !Array.isArray(attendanceDoc.records) || attendanceDoc.records.length === 0) {
+      console.log('No attendance records found for student:', studentId, 'and subject:', subject);
+      return res.status(200).json([]);
+    }
+
+    // Format records
+    const formattedRecords = attendanceDoc.records
+      .map(record => ({
+        date: record.date,
+        present: record.present
+      }))
+      .sort((a, b) => new Date(a.date) - new Date(b.date));
 
     return res.status(200).json(formattedRecords);
+
   } catch (error) {
     console.error('Error fetching student attendance details:', error);
     return res.status(500).json({ 
@@ -251,6 +347,7 @@ exports.getStudentAttendanceDetail = async (req, res) => {
     });
   }
 };
+
 
   
   // Get student information

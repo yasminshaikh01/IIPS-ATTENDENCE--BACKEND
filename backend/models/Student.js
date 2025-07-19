@@ -24,9 +24,10 @@ const studentSchema = new mongoose.Schema({
     type: String,
     required: true
   },
-  specialization: {
-    type: String
-  },
+specializations: {
+  type: [String],
+  default: undefined
+},
   email: {
     type: String,
     lowercase: true

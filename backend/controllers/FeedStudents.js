@@ -12,7 +12,8 @@ const getCurrentAcademicYear = () => {
   return `${year}-${(year + 1).toString().slice(-2)}`;
 };
 
-// ✅ Updated: Create or Update Student by Roll Number
+
+
 exports.uploadStudentsFromCSV = [
   upload.single('file'),
   async (req, res) => {
@@ -22,6 +23,21 @@ exports.uploadStudentsFromCSV = [
 
     const filePath = path.resolve(req.file.path);
     const studentRows = [];
+    const invalidRollNumbers = []; // Track students with invalid roll numbers
+
+    // Roll number pattern validation function
+    const isValidRollNumber = (rollNumber) => {
+      if (!rollNumber || typeof rollNumber !== 'string') return false;
+      
+      // First trim and capitalize the roll number (but don't remove internal spaces)
+      const cleanedRollNumber = rollNumber.trim().toUpperCase();
+      
+      // Pattern: 2 letters + "-2K" + 2 digits + "-" + numbers
+      // Valid examples: IT-2K21-36, CS-2K22-150
+      // Invalid examples: IT-2021-36, It-2K21 -36 (space before hyphen)
+      const pattern = /^[A-Z]{2}-2K\d{2}-\d+$/;
+      return pattern.test(cleanedRollNumber);
+    };
 
     fs.createReadStream(filePath)
       .pipe(csvParser())
@@ -33,45 +49,118 @@ exports.uploadStudentsFromCSV = [
           return key ? row[key] || null : null;
         };
 
-        const rollNumber = getField('Roll Number');
-        if (!rollNumber) return;
+        const rollNumber = (getField('Roll Number') || getField('Roll No.'))?.trim().toUpperCase();
+        const studentName = getField('Student Name')?.trim() || getField('Name')?.trim() || 'Unknown';
+
+        if (!rollNumber) {
+          console.warn('Missing roll number for row:', row);
+          invalidRollNumbers.push({
+            name: studentName,
+            rollNumber: 'MISSING',
+            error: 'Roll number is missing'
+          });
+          return;
+        }
+
+        // Validate roll number pattern
+        if (!isValidRollNumber(rollNumber)) {
+          console.warn('Invalid roll number pattern:', rollNumber, 'for student:', studentName);
+          invalidRollNumbers.push({
+            name: studentName,
+            rollNumber: rollNumber,
+            error: 'Roll number does not match required pattern (XX-2KYY-NNN)'
+          });
+          return; // Skip this student
+        }
+
+        const specialization = getField('Specialization');
 
         studentRows.push({
           rollNumber,
-          fullName: getField('Student Name'),
-          courseId: getField('Course_Id'),
-          semId: getField('Sem_Id'),
-          specialization: getField('Specialization'),
-          email: getField('Email')?.toLowerCase() || null,
-          phoneNumber: getField('Phone'),
-          section: getField('section'),
-          academicYear: getCurrentAcademicYear()
+          fullName: studentName,
+          courseId: getField('Course_Id')?.trim(),
+          semId: getField('Sem_Id')?.trim(),
+          email: getField('Email')?.toLowerCase().trim() || null,
+          phoneNumber: getField('Phone')?.trim() || null,
+          section: getField('section')?.trim() || null,
+          academicYear: getCurrentAcademicYear(),
+          specialization // singular input field
         });
       })
       .on('end', async () => {
         try {
           let inserted = 0, updated = 0;
+          const insertedStudents = [];
+          const updatedStudents = [];
 
           for (const student of studentRows) {
-            const result = await Student.findOneAndUpdate(
-              { rollNumber: student.rollNumber },
-              { $set: student },
-              { upsert: true, new: true }
-            );
+            const existingStudent = await Student.findOne({ rollNumber: student.rollNumber });
 
-            // If result._id existed before update, it's an update
-            const wasExisting = await Student.exists({ rollNumber: student.rollNumber });
-            if (wasExisting) updated++;
-            else inserted++;
+            if (existingStudent) {
+              // Append specialization if it's non-null and not already present
+              if (
+                student.specialization &&
+                typeof student.specialization === 'string' &&
+                !existingStudent.specializations?.includes(student.specialization)
+              ) {
+                if (!Array.isArray(existingStudent.specializations)) {
+                  existingStudent.specializations = [];
+                }
+                existingStudent.specializations.push(student.specialization);
+              }
+
+              // Update other fields
+              existingStudent.fullName = student.fullName || existingStudent.fullName;
+              existingStudent.courseId = student.courseId || existingStudent.courseId;
+              existingStudent.semId = student.semId || existingStudent.semId;
+              existingStudent.email = student.email || existingStudent.email;
+              existingStudent.phoneNumber = student.phoneNumber || existingStudent.phoneNumber;
+              existingStudent.section = student.section || existingStudent.section;
+              existingStudent.academicYear = student.academicYear || existingStudent.academicYear;
+
+              await existingStudent.save();
+              updated++;
+              updatedStudents.push(existingStudent.fullName || existingStudent.rollNumber);
+            } else {
+              // Insert new student
+              const newStudent = {
+                rollNumber: student.rollNumber,
+                fullName: student.fullName,
+                courseId: student.courseId,
+                semId: student.semId,
+                email: student.email,
+                phoneNumber: student.phoneNumber,
+                section: student.section,
+                academicYear: student.academicYear,
+                specializations: student.specialization ? [student.specialization] : []
+              };
+
+              const createdStudent = await Student.create(newStudent);
+              inserted++;
+              insertedStudents.push(createdStudent.fullName || createdStudent.rollNumber);
+            }
           }
 
           fs.unlinkSync(filePath);
-          res.status(200).json({
+          
+          // Prepare response with validation results
+          const response = {
             message: 'Student database processed successfully',
             inserted,
             updated,
-            total: studentRows.length
-          });
+            total: studentRows.length,
+            insertedStudents,
+            updatedStudents
+          };
+
+          // Include invalid roll numbers if any
+          if (invalidRollNumbers.length > 0) {
+            response.invalidRollNumbers = invalidRollNumbers;
+            response.skipped = invalidRollNumbers.length;
+            response.message = `Student database processed with ${invalidRollNumbers.length} students skipped due to invalid roll numbers`;
+          }
+
+          res.status(200).json(response);
         } catch (err) {
           console.error('DB Error:', err);
           res.status(500).json({ message: 'Failed to save students' });
@@ -83,6 +172,7 @@ exports.uploadStudentsFromCSV = [
       });
   }
 ];
+
 
 //  Create or Update Course from CSV
 exports.uploadCoursesFromCSV = [
