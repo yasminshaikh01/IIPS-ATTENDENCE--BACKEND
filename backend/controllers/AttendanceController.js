@@ -216,8 +216,8 @@ exports.submitAttendance = async (req, res) => {
 // Get attendance by course, semester, subject, and academic year with optional filters
 exports.getAttendanceByCourseAndSubject = async (req, res) => {
   try {
-    const { course, semester, subject, academicYear, specialization, section } = req.body;
-    console.log('Query params:', { course, semester, subject, academicYear, specialization, section });
+    const { course, semester, subject, academicYear, specialization, section, startDate, endDate } = req.body;
+    console.log('Query params:', { course, semester, subject, academicYear, specialization, section, startDate, endDate });
 
     // Step 1: Build student query
     const studentQuery = {
@@ -236,7 +236,7 @@ exports.getAttendanceByCourseAndSubject = async (req, res) => {
 
     console.log('Student query:', JSON.stringify(studentQuery));
 
-    // Step 2: Fetch students for the given course and semester with filters
+    // Step 2: Fetch students
     const students = await Student.find(studentQuery);
 
     if (students.length === 0) {
@@ -248,7 +248,11 @@ exports.getAttendanceByCourseAndSubject = async (req, res) => {
 
     const attendanceSummaries = [];
 
-    // Step 3: For each student, fetch their attendance record
+    // Convert start and end dates to Date objects if provided
+    const fromDate = startDate ? new Date(startDate) : null;
+    const toDate = endDate ? new Date(endDate) : null;
+
+    // Step 3: Process each student's attendance
     for (const student of students) {
       const attendanceDoc = await Attendance.findOne({
         studentId: student._id,
@@ -256,12 +260,20 @@ exports.getAttendanceByCourseAndSubject = async (req, res) => {
       });
 
       let attended = 0;
-      const total = attendanceDoc?.records?.length || 0;
+      let total = 0;
 
       if (attendanceDoc?.records) {
-        attendanceDoc.records.forEach(record => {
-          if (record.present) attended++;
-        });
+        let filteredRecords = attendanceDoc.records;
+
+        if (fromDate && toDate) {
+          filteredRecords = filteredRecords.filter(record => {
+            const recordDate = new Date(record.date);
+            return recordDate >= fromDate && recordDate <= toDate;
+          });
+        }
+
+        total = filteredRecords.length;
+        attended = filteredRecords.filter(record => record.present).length;
       }
 
       console.log(`Attendance for student ${student.fullName} (${student._id}): ${attended}/${total}`);
@@ -290,7 +302,7 @@ exports.getAttendanceByCourseAndSubject = async (req, res) => {
     return res.status(200).json({
       students: attendanceSummaries,
       totalStudents: attendanceSummaries.length,
-      filters: { course, semester, subject, academicYear, specialization, section }
+      filters: { course, semester, subject, academicYear, specialization, section, startDate, endDate }
     });
   } catch (error) {
     console.error('Error fetching attendance by course and subject:', error);
@@ -301,13 +313,13 @@ exports.getAttendanceByCourseAndSubject = async (req, res) => {
 exports.getStudentAttendanceDetail = async (req, res) => {
   try {
     const { studentId, subject } = req.params;
+    const { startDate, endDate } = req.query;
 
     if (!mongoose.Types.ObjectId.isValid(studentId)) {
       console.error('Invalid student ID:', studentId);
       return res.status(400).json({ message: 'Invalid student ID' });
     }
 
-    // Build MongoDB query based only on existing fields
     const query = {
       studentId: new mongoose.Types.ObjectId(studentId),
       subjectCode: subject.trim(),
@@ -315,13 +327,11 @@ exports.getStudentAttendanceDetail = async (req, res) => {
 
     console.log('Searching attendance with query:', JSON.stringify(query, null, 2));
 
-    // Check if student exists
     const student = await Student.findById(studentId);
     if (!student) {
       return res.status(404).json({ message: 'Student not found' });
     }
 
-    // Fetch attendance document
     const attendanceDoc = await Attendance.findOne(query);
 
     if (!attendanceDoc || !Array.isArray(attendanceDoc.records) || attendanceDoc.records.length === 0) {
@@ -329,8 +339,20 @@ exports.getStudentAttendanceDetail = async (req, res) => {
       return res.status(200).json([]);
     }
 
-    // Format records
-    const formattedRecords = attendanceDoc.records
+    // Filter by date range if startDate and/or endDate are provided
+    let filteredRecords = attendanceDoc.records;
+
+    if (startDate || endDate) {
+      const from = startDate ? new Date(startDate) : new Date('1970-01-01');
+      const to = endDate ? new Date(endDate) : new Date(); // current date if endDate is not provided
+
+      filteredRecords = filteredRecords.filter(record => {
+        const recordDate = new Date(record.date);
+        return recordDate >= from && recordDate <= to;
+      });
+    }
+
+    const formattedRecords = filteredRecords
       .map(record => ({
         date: record.date,
         present: record.present
