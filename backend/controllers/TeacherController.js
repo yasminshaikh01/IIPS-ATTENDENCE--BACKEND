@@ -112,7 +112,7 @@ const login = async (req, res) => {
       teacherId: teacher._id,
       name: teacher.name,
       email: teacher.email,
-      mobileNumber: teacher.mobileNumber,
+      mobileNumber: teacher?.mobileNumber,
       photo: teacher.photo,
     });
   } catch (error) {

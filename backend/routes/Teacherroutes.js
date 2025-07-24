@@ -13,7 +13,7 @@ const {
 
   
 } = require("../controllers/TeacherController");
-const { uploadStudentsFromCSV, uploadCoursesFromCSV, uploadSubjectsFromCSV } = require("../controllers/FeedStudents");
+const { uploadStudentsFromCSV, uploadCoursesFromCSV, uploadSubjectsFromCSV, uploadTeachersFromCSV } = require("../controllers/FeedStudents");
 const router = express.Router();
 
 router.post("/login", login);
@@ -29,5 +29,6 @@ router.post("/getteacherDetails",getTeacherDetailsById);
 router.post("/upload-students",uploadStudentsFromCSV);
 router.post("/upload-courses",uploadCoursesFromCSV);
 router.post("/upload-subjects",uploadSubjectsFromCSV);
+router.post("/upload-teachers",uploadTeachersFromCSV);
 
 module.exports = router;

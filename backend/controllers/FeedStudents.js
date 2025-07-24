@@ -5,7 +5,9 @@ const path = require('path');
 const Student = require('../models/Student');
 const Course = require('../models/Course');
 const upload = multer({ dest: 'uploads/' });
+const bcrypt = require("bcryptjs");
 const Subject = require('../models/Subject');
+const Teacher=require('../models/Teacher');
 // Academic Year helper
 const getCurrentAcademicYear = () => {
   const year = new Date().getFullYear();
@@ -270,4 +272,79 @@ exports.uploadSubjectsFromCSV = [
         }
       });
   }
+];
+exports.uploadTeachersFromCSV = [
+  upload.single('file'),
+  async (req, res) => {
+    if (!req.file) {
+      return res.status(400).json({ message: 'CSV file is required' });
+    }
+
+    const filePath = path.resolve(req.file.path);
+    const teachers = [];
+
+    fs.createReadStream(filePath)
+      .pipe(csvParser())
+      .on('data', (row) => {
+        const normalize = (key) => key?.trim().toLowerCase();
+        const getField = (fieldName) => {
+          const key = Object.keys(row).find(k => normalize(k) === normalize(fieldName));
+          return key ? row[key]?.trim() || null : null;
+        };
+
+        const name = getField('name');
+        const email = getField('email');
+        const password = getField('password');
+
+        if (!name || !email || !password) return;
+
+        teachers.push({ name, email, password });
+      })
+      .on('end', async () => {
+        let inserted = 0;
+        let skipped = 0;
+        const skippedEmails = [];
+        const failed = [];
+        const failedEmails = [];
+
+        for (const { name, email, password } of teachers) {
+          try {
+            const existing = await Teacher.findOne({ email });
+            if (existing) {
+              skipped++;
+              skippedEmails.push(email);
+              continue;
+            }
+
+            const hashedPassword = await bcrypt.hash(password, 10);
+
+            const newTeacher = new Teacher({
+              name,
+              email,
+              mobileNumber: null,
+              password: hashedPassword,
+            });
+
+            await newTeacher.save();
+            inserted++;
+          } catch (err) {
+            console.error(`Error saving ${email}:`, err.message);
+            failed.push({ email, error: err.message });
+            failedEmails.push(email);
+          }
+        }
+
+        fs.unlinkSync(filePath);
+
+        res.status(200).json({
+          message: 'Teachers upload completed',
+          inserted,
+          skipped,
+          failedCount: failed.length,
+          total: teachers.length,
+          skippedEmails,
+          failedEmails,
+        });
+      });
+  },
 ];

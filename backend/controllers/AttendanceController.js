@@ -5,6 +5,7 @@ const AttendanceSummary = require('../models/AttendanceSummary');
 const mongoose = require('mongoose');
 const Course = require('../models/Course');
 const Subject = require('../models/Subject');
+const bcrypt = require("bcryptjs");
 const emailService = require('../config/nodemailer');
 
 // Get all subjects for a course and semester

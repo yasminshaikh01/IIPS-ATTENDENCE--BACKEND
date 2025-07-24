@@ -5,7 +5,7 @@ const teacherSchema = new mongoose.Schema(
     name: { type: String, required: true },
     email: { type: String, required: true, unique: true },
     password: { type: String, required: true },
-    mobileNumber: { type: String, required: true },
+    mobileNumber: { type: String},
     otp: { type: String },
     otpExpiry: { type: Date },
     photo: { type: String, default: "http://res.cloudinary.com/duxvbwdf3/image/upload/v1731004725/question/xnykk7ixq6bk2qdrppty.png" },
