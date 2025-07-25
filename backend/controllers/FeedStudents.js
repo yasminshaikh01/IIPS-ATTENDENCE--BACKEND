@@ -89,85 +89,86 @@ exports.uploadStudentsFromCSV = [
           specialization // singular input field
         });
       })
-      .on('end', async () => {
-        try {
-          let inserted = 0, updated = 0;
-          const insertedStudents = [];
-          const updatedStudents = [];
+     .on('end', async () => {
+  try {
+    let inserted = 0, updated = 0;
+    const insertedStudents = [];
+    const updatedStudents = [];
 
-          for (const student of studentRows) {
-            const existingStudent = await Student.findOne({ rollNumber: student.rollNumber });
+    for (const student of studentRows) {
+      const existingStudent = await Student.findOne({ rollNumber: student.rollNumber });
 
-            if (existingStudent) {
-              // Append specialization if it's non-null and not already present
-              if (
-                student.specialization &&
-                typeof student.specialization === 'string' &&
-                !existingStudent.specializations?.includes(student.specialization)
-              ) {
-                if (!Array.isArray(existingStudent.specializations)) {
-                  existingStudent.specializations = [];
-                }
-                existingStudent.specializations.push(student.specialization);
-              }
-
-              // Update other fields
-              existingStudent.fullName = student.fullName || existingStudent.fullName;
-              existingStudent.courseId = student.courseId || existingStudent.courseId;
-              existingStudent.semId = student.semId || existingStudent.semId;
-              existingStudent.email = student.email || existingStudent.email;
-              existingStudent.phoneNumber = student.phoneNumber || existingStudent.phoneNumber;
-              existingStudent.section = student.section || existingStudent.section;
-              existingStudent.academicYear = student.academicYear || existingStudent.academicYear;
-
-              await existingStudent.save();
-              updated++;
-              updatedStudents.push(existingStudent.fullName || existingStudent.rollNumber);
-            } else {
-              // Insert new student
-              const newStudent = {
-                rollNumber: student.rollNumber,
-                fullName: student.fullName,
-                courseId: student.courseId,
-                semId: student.semId,
-                email: student.email,
-                phoneNumber: student.phoneNumber,
-                section: student.section,
-                academicYear: student.academicYear,
-                specializations: student.specialization ? [student.specialization] : []
-              };
-
-              const createdStudent = await Student.create(newStudent);
-              inserted++;
-              insertedStudents.push(createdStudent.fullName || createdStudent.rollNumber);
-            }
+      if (existingStudent) {
+        // Append specialization if it's non-null and not already present
+        if (
+          student.specialization &&
+          typeof student.specialization === 'string' &&
+          !existingStudent.specializations?.includes(student.specialization)
+        ) {
+          if (!Array.isArray(existingStudent.specializations)) {
+            existingStudent.specializations = [];
           }
-
-          fs.unlinkSync(filePath);
-          
-          // Prepare response with validation results
-          const response = {
-            message: 'Student database processed successfully',
-            inserted,
-            updated,
-            total: studentRows.length,
-            insertedStudents,
-            updatedStudents
-          };
-
-          // Include invalid roll numbers if any
-          if (invalidRollNumbers.length > 0) {
-            response.invalidRollNumbers = invalidRollNumbers;
-            response.skipped = invalidRollNumbers.length;
-            response.message = `Student database processed with ${invalidRollNumbers.length} students skipped due to invalid roll numbers`;
-          }
-
-          res.status(200).json(response);
-        } catch (err) {
-          console.error('DB Error:', err);
-          res.status(500).json({ message: 'Failed to save students' });
+          existingStudent.specializations.push(student.specialization);
         }
-      })
+
+        // Update other fields
+        existingStudent.fullName = student.fullName || existingStudent.fullName;
+        existingStudent.courseId = student.courseId || existingStudent.courseId;
+        existingStudent.semId = student.semId || existingStudent.semId;
+        existingStudent.email = student.email || existingStudent.email;
+        existingStudent.phoneNumber = student.phoneNumber || existingStudent.phoneNumber;
+        existingStudent.section = student.section || existingStudent.section;
+        existingStudent.academicYear = student.academicYear || existingStudent.academicYear;
+
+        await existingStudent.save();
+        updated++;
+        updatedStudents.push(existingStudent.fullName || existingStudent.rollNumber);
+      } else {
+        // Insert new student
+        const newStudent = {
+          rollNumber: student.rollNumber,
+          fullName: student.fullName,
+          courseId: student.courseId,
+          semId: student.semId,
+          email: student.email,
+          phoneNumber: student.phoneNumber,
+          section: student.section,
+          academicYear: student.academicYear,
+          specializations: student.specialization ? [student.specialization] : []
+        };
+
+        const createdStudent = await Student.create(newStudent);
+        inserted++;
+        insertedStudents.push(createdStudent.fullName || createdStudent.rollNumber);
+      }
+    }
+
+    fs.unlinkSync(filePath);
+
+    // Prepare response
+    const response = {
+      message: 'Student database processed successfully',
+      inserted,
+      updated,
+      total: studentRows.length,
+      insertedStudents,
+      updatedStudents
+    };
+
+    if (invalidRollNumbers.length > 0) {
+      response.invalidRollNumbers = invalidRollNumbers;
+      response.skipped = invalidRollNumbers.length;
+      response.skippedStudents = invalidRollNumbers.map(s => s.name || 'Unknown');
+      response.message = `Student database processed with ${invalidRollNumbers.length} students skipped due to invalid roll numbers`;
+    }
+
+    res.status(200).json(response);
+  } catch (err) {
+    console.error('DB Error:', err);
+    res.status(500).json({ message: 'Failed to save students' });
+  }
+})
+
       .on('error', (err) => {
         console.error('CSV Error:', err);
         res.status(500).json({ message: 'Failed to parse CSV' });
@@ -184,6 +185,7 @@ exports.uploadCoursesFromCSV = [
 
     const filePath = path.resolve(req.file.path);
     const courses = [];
+    const skippedCourses = [];
 
     fs.createReadStream(filePath)
       .pipe(csvParser())
@@ -194,36 +196,81 @@ exports.uploadCoursesFromCSV = [
           return key ? row[key] || null : null;
         };
 
-        const Course_Id = getField('Course_Id');
-        if (!Course_Id) return;
+        const Course_Id = getField('Course_Id')?.trim();
+        const Course_Name = getField('Course_Name')?.trim();
+        const noOfSemRaw = getField('No_of_Sem')?.trim();
+
+        if (!Course_Id || !noOfSemRaw || isNaN(parseInt(noOfSemRaw))) {
+          skippedCourses.push({
+            Course_Id: Course_Id || 'MISSING',
+            Course_Name: Course_Name || 'Unknown',
+            reason: !Course_Id ? 'Missing Course_Id' : 'Invalid No_of_Sem'
+          });
+          return;
+        }
 
         courses.push({
           Course_Id,
-          Course_Name: getField('Course_Name'),
-          No_of_Sem: parseInt(getField('No_of_Sem')),
+          Course_Name,
+          No_of_Sem: parseInt(noOfSemRaw),
         });
       })
       .on('end', async () => {
         try {
+          let inserted = 0;
+          let updated = 0;
+          const insertedCourses = [];
+          const updatedCourses = [];
+
           for (const course of courses) {
-            await Course.findOneAndUpdate(
-              { Course_Id: course.Course_Id },
-              course,
-              { upsert: true, new: true }
-            );
+            const existing = await Course.findOne({ Course_Id: course.Course_Id });
+
+            if (existing) {
+              await Course.findOneAndUpdate(
+                { Course_Id: course.Course_Id },
+                course,
+                { new: true }
+              );
+              updated++;
+              updatedCourses.push(course.Course_Id);
+            } else {
+              await Course.create(course);
+              inserted++;
+              insertedCourses.push(course.Course_Id);
+            }
           }
 
           fs.unlinkSync(filePath);
-          res.status(200).json({ message: 'Courses uploaded/updated successfully', count: courses.length });
+
+          const response = {
+            message: `Courses processed successfully`,
+            inserted,
+            updated,
+            skipped: skippedCourses.length,
+            insertedCourses,
+            updatedCourses,
+            skippedCourses,
+            totalProcessed: courses.length + skippedCourses.length
+          };
+
+          if (skippedCourses.length > 0) {
+            response.message = `Courses processed with ${skippedCourses.length} skipped due to invalid/missing fields.`;
+          }
+
+          res.status(200).json(response);
         } catch (err) {
           console.error(err);
           res.status(500).json({ message: 'Failed to upload courses' });
         }
+      })
+      .on('error', (err) => {
+        console.error('CSV parse error:', err);
+        res.status(500).json({ message: 'Failed to parse CSV file' });
       });
   }
 ];
 
-// Create or Update Subject from CSV
+// Create or Update Subjects from CSV
 exports.uploadSubjectsFromCSV = [
   upload.single('file'),
   async (req, res) => {
@@ -231,6 +278,7 @@ exports.uploadSubjectsFromCSV = [
 
     const filePath = path.resolve(req.file.path);
     const subjects = [];
+    const skippedSubjects = [];
 
     fs.createReadStream(filePath)
       .pipe(csvParser())
@@ -241,38 +289,79 @@ exports.uploadSubjectsFromCSV = [
           return key ? row[key] || null : null;
         };
 
-        const Sub_Code = getField('Sub_Code');
-        if (!Sub_Code) return;
+        const Sub_Code = getField('Sub_Code')?.trim();
+        const Sub_Name = getField('Sub_Name')?.trim();
+
+        if (!Sub_Code || !Sub_Name) {
+          skippedSubjects.push({
+            Sub_Code: Sub_Code || 'MISSING',
+            Sub_Name: Sub_Name || 'MISSING',
+            reason: !Sub_Code ? 'Missing Sub_Code' : 'Missing Sub_Name'
+          });
+          return;
+        }
 
         subjects.push({
-          Course_ID: getField('Course_ID'),
-          Sem_Id: getField('Sem_Id'),
-          Specialization: getField('Specialization'),
+          Course_ID: getField('Course_ID')?.trim(),
+          Sem_Id: getField('Sem_Id')?.trim(),
+          Specialization: getField('Specialization')?.trim(),
           Sub_Code,
-          Sub_Name: getField('Sub_Name'),
-          Semester: getField('Semester'),
-          Year: getField('Year'),
+          Sub_Name,
+          Semester: getField('Semester')?.trim(),
+          Year: getField('Year')?.trim(),
         });
       })
       .on('end', async () => {
         try {
+          let inserted = 0;
+          let updated = 0;
+          const insertedSubjects = [];
+          const updatedSubjects = [];
+
           for (const subject of subjects) {
-            await Subject.findOneAndUpdate(
-              { Sub_Code: subject.Sub_Code },
-              subject,
-              { upsert: true, new: true }
-            );
+            const existing = await Subject.findOne({ Sub_Code: subject.Sub_Code });
+
+            if (existing) {
+              await Subject.findOneAndUpdate({ Sub_Code: subject.Sub_Code }, subject, { new: true });
+              updated++;
+              updatedSubjects.push(subject.Sub_Code);
+            } else {
+              await Subject.create(subject);
+              inserted++;
+              insertedSubjects.push(subject.Sub_Code);
+            }
           }
 
           fs.unlinkSync(filePath);
-          res.status(200).json({ message: 'Subjects uploaded/updated successfully', count: subjects.length });
+
+          const response = {
+            message: 'Subjects processed successfully',
+            inserted,
+            updated,
+            skipped: skippedSubjects.length,
+            insertedSubjects,
+            updatedSubjects,
+            skippedSubjects,
+            totalProcessed: subjects.length + skippedSubjects.length
+          };
+
+          if (skippedSubjects.length > 0) {
+            response.message = `Subjects processed with ${skippedSubjects.length} skipped due to missing fields.`;
+          }
+
+          res.status(200).json(response);
         } catch (err) {
           console.error(err);
           res.status(500).json({ message: 'Failed to upload subjects' });
         }
+      })
+      .on('error', (err) => {
+        console.error('CSV parse error:', err);
+        res.status(500).json({ message: 'Failed to parse CSV file' });
       });
   }
 ];
+
 exports.uploadTeachersFromCSV = [
   upload.single('file'),
   async (req, res) => {
@@ -282,6 +371,8 @@ exports.uploadTeachersFromCSV = [
 
     const filePath = path.resolve(req.file.path);
     const teachers = [];
+    const skippedTeachers = [];
+    const failedTeachers = [];
 
     fs.createReadStream(filePath)
       .pipe(csvParser())
@@ -296,23 +387,33 @@ exports.uploadTeachersFromCSV = [
         const email = getField('email');
         const password = getField('password');
 
-        if (!name || !email || !password) return;
+        if (!name || !email || !password) {
+          skippedTeachers.push({
+            name: name || 'MISSING',
+            email: email || 'MISSING',
+            reason: 'Missing required fields (name/email/password)'
+          });
+          return;
+        }
 
         teachers.push({ name, email, password });
       })
       .on('end', async () => {
         let inserted = 0;
-        let skipped = 0;
-        const skippedEmails = [];
-        const failed = [];
-        const failedEmails = [];
+        let skipped = skippedTeachers.length;
+        let failed = 0;
+        const insertedTeachers = [];
 
         for (const { name, email, password } of teachers) {
           try {
             const existing = await Teacher.findOne({ email });
             if (existing) {
               skipped++;
-              skippedEmails.push(email);
+              skippedTeachers.push({
+                name,
+                email,
+                reason: 'Duplicate email (already exists)'
+              });
               continue;
             }
 
@@ -327,24 +428,33 @@ exports.uploadTeachersFromCSV = [
 
             await newTeacher.save();
             inserted++;
+            insertedTeachers.push(email);
           } catch (err) {
-            console.error(`Error saving ${email}:`, err.message);
-            failed.push({ email, error: err.message });
-            failedEmails.push(email);
+            failed++;
+            failedTeachers.push({
+              name,
+              email,
+              reason: err.message || 'Unknown error'
+            });
           }
         }
 
         fs.unlinkSync(filePath);
 
         res.status(200).json({
-          message: 'Teachers upload completed',
+          message: `Teachers upload completed with ${skipped} skipped and ${failed} failed`,
           inserted,
           skipped,
-          failedCount: failed.length,
-          total: teachers.length,
-          skippedEmails,
-          failedEmails,
+          failed,
+          total: teachers.length + skippedTeachers.length,
+          insertedTeachers,
+          skippedTeachers,
+          failedTeachers
         });
+      })
+      .on('error', (err) => {
+        console.error('CSV Parse Error:', err);
+        res.status(500).json({ message: 'Failed to parse CSV file' });
       });
   },
 ];
