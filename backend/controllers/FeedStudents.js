@@ -406,18 +406,19 @@ exports.uploadTeachersFromCSV = [
 
         for (const { name, email, password } of teachers) {
           try {
+            const hashedPassword = await bcrypt.hash(password, 10);
             const existing = await Teacher.findOne({ email });
+
             if (existing) {
-              skipped++;
-              skippedTeachers.push({
-                name,
-                email,
-                reason: 'Duplicate email (already exists)'
-              });
+              // Update existing teacher
+              existing.name = name;
+              existing.password = hashedPassword;
+              await existing.save();
+
+              inserted++;
+              insertedTeachers.push(email);
               continue;
             }
-
-            const hashedPassword = await bcrypt.hash(password, 10);
 
             const newTeacher = new Teacher({
               name,
