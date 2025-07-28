@@ -1,0 +1,226 @@
+Course_ID,Sem_Id,Specialization,Sub_Code,Sub_Name,Semester,Year
+C1,1,,IC-101,Mathematics-I,Odd,2025
+C1,1,,IC-104C,Problem Solving using C,Odd,2025
+C1,1,,IC-105,PC Software,Odd,2025
+C1,1,,IC-103B,Digital Electronics,Odd,2025
+C1,1,,IC-106C,English & Communicative Skills,Odd,2025
+C1,1,,IC-107E,Problem Solving using C Lab,Odd,2025
+C1,1,,IC-110C,PC Software Lab,Odd,2025
+C1,1,,IC-111B,DE Lab,Odd,2025
+C1,3,,IC-311A,DBMS,Odd,2025
+C1,3,,IC-305C,Data Structures,Odd,2025
+C1,3,,IC-314,Probability and Statistics,Odd,2025
+C1,3,,IC-315,Financial Accounting,Odd,2025
+C1,3,,IC-312A,Chem & Env Sci,Odd,2025
+C1,3,,IC-308A,DBMS Lab,Odd,2025
+C1,3,,IC-307D,Data Structures Lab,Odd,2025
+C1,5,,IC-504A,System Programming,Odd,2025
+C1,5,,IC-501D,Programming with Python,Odd,2025
+C1,5,,IC-502C,Introduction to Data Science,Odd,2025
+C1,5,,IC-503A,Computer Graphics & Multimedia,Odd,2025
+C1,5,,IC-512B,Computer Oriented Numerical Methods,Odd,2025
+C1,5,,IC-507E,Python Lab,Odd,2025
+C1,5,,IC-508E,Computer Graphics & Multimedia Lab,Odd,2025
+C1,7,,IC-702B,Computer Networks,Odd,2025
+C1,7,,IC-701,Computer Architecture,Odd,2025
+C1,7,,IC-703C,Artificial Intelligence,Odd,2025
+C1,7,,IC-702A,Design & Analysis Of Algorithms,Odd,2025
+C1,7,,IC-704B,Software Engineering,Odd,2025
+C1,7,,IC-709D,Artificial Intelligence Lab,Odd,2025
+C1,7,,IC-709B,Design & Analysis Of Algorithms Lab,Odd,2025
+C1,9,,IC-905A,Object Oriented Analysis & Design,Odd,2025
+C1,9,,IC-904A,Multimedia Systems,Odd,2025
+C1,9,,IC-901A,Compiler Design,Odd,2025
+C1,9,,IC-908A,Cloud Computing,Odd,2025
+C1,9,,IC-909A,ITPM,Odd,2025
+C1,9,,IC-912B,OOAD Lab,Odd,2025
+C2,1,,IT-104A,Programming using C,Odd,2025
+C2,1,,IT-105A,Fundamentals of Computer,Odd,2025
+C2,1,,IT-101,Mathematics-I,Odd,2025
+C2,1,,IT-103B,Digital Electronics,Odd,2025
+C2,1,,IT-106D,Communication Skills,Odd,2025
+C2,1,,IT-107E,Programming using C Lab,Odd,2025
+C2,1,,IT-109,Fundamentals of Computer  Lab,Odd,2025
+C2,3,,IT-302A,Data Structures,Odd,2025
+C2,3,,IT-305A,Web Programming,Odd,2025
+C2,3,,IT-301,Mathematics-III,Odd,2025
+C2,3,,IT-301A,French,Odd,2025
+C2,3,,IT-304A,IT Act and Cyber Law,Odd,2025
+C2,3,,IT-308E,Web Programming Lab,Odd,2025
+C2,3,,IT-307B,Data StructuresLab,Odd,2025
+C2,5,,IT-501D,Introduction to Data Science and R-Language,Odd,2025
+C2,5,,IT-502B,Operating System,Odd,2025
+C2,5,,IT-505B,Programming in  Java,Odd,2025
+C2,5,,IT-503B,Computer Graphics and Multimedia,Odd,2025
+C2,5,,IT-512,Discrete Structure,Odd,2025
+C2,5,,IT-507C,Programming in Java Lab,Odd,2025
+C2,5,,IT-508F,Computer Graphics and Multimedia Lab,Odd,2025
+C2,7,,IT-711,Advanced Database Management System,Odd,2025
+C2,7,,IT-702B,Compiler Design,Odd,2025
+C2,7,,IT-701B,Computer Network and Secutity,Odd,2025
+C2,7,,IT-703B,Cloud Computing,Odd,2025
+C2,7,,IT-710,Project,Odd,2025
+C2,7,,IT-709A,ADBMS Lab,Odd,2025
+C2,9,,  IT-901,Machine Learning,Odd,2025
+C2,9,,  IT-908A,Object Oriented Analysis and Design,Odd,2025
+C2,9,,  IT-902B,Cyber Security,Odd,2025
+C2,9,,  IT-905,Wireless Sensor Network and IoT,Odd,2025
+C2,9,,  IT-903B,Research Methodology,Odd,2025
+C2,9,,IT-913A,Soft Computing,Odd,2025
+C2,9,,IT-912,Object Oriented Analysis and Design Lab,Odd,2025
+C3,1,,CS-101,Mathematics – I (Calculus& Linear Algebra),Odd,2025
+C3,1,,CS-102,Physics –I (Semi-conductor Physics),Odd,2025
+C3,1,,CS-103,Communications Skills,Odd,2025
+C3,1,,CS-104,Digital Electronics,Odd,2025
+C3,1,,CS-105,Problem Solving using C,Odd,2025
+C3,1,,CS-106,Digital Electronics Lab,Odd,2025
+C3,1,,CS-107, C Programming Lab,Odd,2025
+C4,1,,IM-101,Principles and Practices of Management,Odd,2025
+C4,1,,IM-102,Financial Accounting,Odd,2025
+C4,1,,IM-102B,Interpersonal Behaviour and Orgnisational Behaviour,Odd,2025
+C4,1,,IM-103,Business Mathematics – I,Odd,2025
+C4,1,,IM-104C,Computer Application & Web Technology,Odd,2025
+C4,1,,IM-106D,Language Proficiency I -English,Odd,2025
+C4,3,,IM-301,HRM,Odd,2025
+C4,3,,IM-302,Management Accounting,Odd,2025
+C4,3,,IM-310B,Language Proficiency II (French),Odd,2025
+C4,3,,IM-314,Managerial Economics,Odd,2025
+C4,3,,IM-315,Business Statistics I,Odd,2025
+C4,3,,IM-316,RDBMS,Odd,2025
+C4,5,,IM-501B,Financial Management II,Odd,2025
+C4,5,,IM-502,Production and Operations Management,Odd,2025
+C4,5,,IM-506A,Entrepreneurship,Odd,2025
+C4,5,,IM-511,Econometrics,Odd,2025
+C4,5,,IM-509A,Income Tax,Odd,2025
+C4,5,,IM-510A,Quantitative Techniques,Odd,2025
+C4,7,Core,IM-701,Core: Quality Management (Sec A & B),Odd,2025
+C4,7,MA,IM-712MA,MA: Integrated Marketing Communication,Odd,2025
+C4,7,MA,IM-707MA,MA: Sales & Distribution Management,Odd,2025
+C4,7,MA,IM-711MA,MA: Consumer Behavior,Odd,2025
+C4,7,FA,IM-714FA,FA: Security Analysis and Portfolio Management,Odd,2025
+C4,7,FA,IM-706FA,FA: Financial Institutions and Markets,Odd,2025
+C4,7,FA,IM-707 FA ,FA: Banking and Financial Services,Odd,2025
+C4,7,FB,IM-706FB,FB: Financial Derivates and Risk Management,Odd,2025
+C4,7,FB,IM-715FB,FB: Corporate Financial Analysis,Odd,2025
+C4,7,FB,IM-705FB,FB: Business Analytics and Data Management ,Odd,2025
+C4,7,BA,IM-707BA,FB: Business Analytics and Data Management ,Odd,2025
+C4,7,HA,IM-712 HA,HA: Managing People,Odd,2025
+C4,7,HA,IM-709 HA,HA: Human Resource Development,Odd,2025
+C4,7,HA,IM-711 HA,HA: Training and Development,Odd,2025
+C4,7,BA,IM-705BA,BA: Analytics System Analysis and Design,Odd,2025
+C4,7,BA,IM-706BA,BA: Basics of Python ,Odd,2025
+C4,9,Core,IM-901C,Core: Strategic Management,Odd,2025
+C4,9,Core,IM-903C,Core: Business Ethics and Corporate Governance,Odd,2025
+C4,9,MA,IM-919MA,MA: Marketing Decisions,Odd,2025
+C4,9,MA,IM-920MA,MA: Marketing Research,Odd,2025
+C4,9,FA,IM-919FA,FA: Multinational Financial Management,Odd,2025
+C4,9,FA,IM-922FA,FA: Advance Investment Management,Odd,2025
+C4,9,FB,IM-921FB,FB: Financial Research,Odd,2025
+C4,9,FB,IM-922FB,FB: Behavioral Finance,Odd,2025
+C4,9,HA,IM-919HA,HA: HR for Business Excellence,Odd,2025
+C4,9,HA,IM-920 HA,HA: Latest Trends in HRM,Odd,2025
+C4,9,BA,IM-9     BA,BA: Ethical and Legal Aspects of Analytics,Odd,2025
+C4,9,BA,IM-9     BA,BA: Decision Making for Business Analytics,Odd,2025
+C5,1,,FT – 101,Principles and Practices of Managemenr,Odd,2025
+C5,1,,FT – 105,Human Resource Management,Odd,2025
+C5,1,,FT – 107D,Managerial Economics,Odd,2025
+C5,1,,FT-112A,Business Law,Odd,2025
+C5,1,,FT – 113,Business Mathematics and Statistics,Odd,2025
+C5,1,,FT -114,Soft Skills for Managers,Odd,2025
+C5,1,,FT –102C,Business Accounting I,Odd,2025
+C5,1,,FT-110A,Quantitative Techniques For Business,Odd,2025
+C5,1,,FT – 117,DataVisualisation,Odd,2025
+C5,3,Elective,FT-301E,Strategic Management,Odd,2025
+C5,3,Elective,FT 314B,Dissertation / Industrial Project,Odd,2025
+C5,3,MA,FT-304MA,Integrated Marketing Communication,Odd,2025
+C5,3,MA,FT-305MA,Consumer Behavior,Odd,2025
+C5,3,MA,FT-307MA,Sales and Distribution Management,Odd,2025
+C5,3,FA,FT-314FA,Security Analysis and Portfolio Management,Odd,2025
+C5,3,FA,FT-305FA,Financial Institutions & Markets,Odd,2025
+C5,3,FA,FT-306FA,Banking & Financial Services ,Odd,2025
+C5,3,HA,FT-314HA,Human Resource Development,Odd,2025
+C5,3,HA,FT-315HA,Training and Development,Odd,2025
+C5,3,HA,FT-316HA,Managing People,Odd,2025
+C5,3,BA,FT-315BA,Business Analytics and Data Management ,Odd,2025
+C5,3,BA,FT-318BA,LAB: Business Analytics and Data Management ,Odd,2025
+C5,3,BA,FT-316BA,Analytics- System Analysis and Design,Odd,2025
+C5,3,BA,FT-317BA,Basics of Python,Odd,2025
+C5,3,BA,FT-319BA,LAB: Basics of Python,Odd,2025
+C5,3,MB,FT-314MB,Logistic and Supply Chain Management,Odd,2025
+C5,3,MB,FT-313MB,Rural and Retail Marketing,Odd,2025
+C5,3,MB,FT-310MB,Business Analytics and Data management,Odd,2025
+C5,3,MB,FT-320MB,LAB: Business Analytics and Data management,Odd,2025
+C5,3,FB,FT-313FB,Corporate Financial Analysis,Odd,2025
+C5,3,FB,FT-316FB,Financial Derivatives and Risk,Odd,2025
+C5,3,FB,FT-315FB,Business Analytics and Data Management ,Odd,2025
+C5,3,FB,FT-321FB,Business Analytics and Data Management LAB,Odd,2025
+C6,1,,APR-111A,Accounting and Finance for Managers,Odd,2025
+C6,1,,APR-106B,Business Statistics,Odd,2025
+C6,1,,APR-112,Integrated Marketing Communication,Odd,2025
+C6,1,,APR-110,Organization Behavior,Odd,2025
+C6,1,,APR-102,Principles of Marketing Management,Odd,2025
+C6,1,,APR-113,Fundamentals of Management,Odd,2025
+C6,1,,APR-101B,Principles of Advertising Management,Odd,2025
+C6,3,,APR-301C,Corporate Communication,Odd,2025
+C6,3,,APR-302,Commercial Designing,Odd,2025
+C6,3,,APR-302B,Consumer Behavior,Odd,2025
+C6,3,,APR-306B,Computer Graphics,Odd,2025
+C6,3,,APR-308,Service Marketing,Odd,2025
+C6,3,,APR-312,Decision Making Skills.,Odd,2025
+C7,1,,ES101B,Fundamentals of Management  & Entrepreneurship,Odd,2025
+C7,1,,ES102A,Creativity and Innovation,Odd,2025
+C7,1,,ES104A,Fundamentals of Finance -I,Odd,2025
+C7,1,,ES106A,Principles of Marketing Management,Odd,2025
+C7,1,,ES109A,Entrepreneurial Economics,Odd,2025
+C7,1,,ES110,Business Communication,Odd,2025
+C7,3,,ES301A,Financing New Ventures and Business,Odd,2025
+C7,3,,ES302A,Managing startup and Strategic Framework for SMEs,Odd,2025
+C7,3,,ES303A,Introduction to Taxation,Odd,2025
+C7,3,,ES305A,Production and Operations Management,Odd,2025
+C7,3,,ES306A,Organizational Behaviour,Odd,2025
+C7,3,,ES310,Business Strategies,Odd,2025
+C7,3,,ES311,E Business and Digital Marketing,Odd,2025
+C8,1,Core,IB-101N,Financial Accounting –I,Odd,2025
+C8,1,Core,IB-108N,Cost Accounting,Odd,2025
+C8,1,Core,IB-107N,Micro Economics,Odd,2025
+C8,1,Core,IB-103N,Principles and Practices of Management ,Odd,2025
+C8,1,Core,IB-110NE,Language Ability (Hindi) ,Odd,2025
+C8,1,Elective,IB-105NE,Computer Fundamentals,Odd,2025
+C8,1,Elective,IB-109NE,Basics of Psychology,Odd,2025
+C8,3,Core,IB – 307N,Management Accounting – II,Odd,2025
+C8,3,Core,IB – 302N,Income Tax,Odd,2025
+C8,3,Core,IB – 303N,Macro Economics,Odd,2025
+C8,3,Core,IB – 308N,Business Statistics,Odd,2025
+C8,3,Core,IB – 306N,RDBMS,Odd,2025
+C8,3,Elective-MktMgmt,IB – 305NE,Marketing Management,Odd,2025
+C8,3,Elective-HumanValues,IB – 307NE,Human Values and Professional Ethics,Odd,2025
+C8,5,Core,IB-501N,Corporate Accounting-II ,Odd,2025
+C8,5,Core,IB-502N,Financial Management -I,Odd,2025
+C8,5,Elective-IFS,IB-504NE,Indian Financial System,Odd,2025
+C8,5,Elective-BankingInsurance,IB-505NE,Banking and Insurance,Odd,2025
+C8,5,Core,IB-503NE,E-Commerce ,Odd,2025
+C8,5,Project,IB-506B,Field Project ,Odd,2025
+C8,7,Core,IB-701N,Direct Tax Planning,Odd,2025
+C8,7,Core,IB-702N,Financial Statement Analysis,Odd,2025
+C8,7,Elective-CorporateRV,IB-703NE,Corporate Restructuring and Valuation ,Odd,2025
+C8,7,Elective-BusinessAnalytics,IB-704NE,Business Analytics ,Odd,2025
+C8,7,Core,IB-705,Research Methodology,Odd,2025
+C8,7,Project,IB-706,Field Project /Internship / Research Project/ Apprenticeship,Odd,2025
+C9,5,,TM-501,HRM,Odd,2025
+C9,5,,TM-502,Transport System,Odd,2025
+C9,5,,TM-503,Tour Guiding and Interpretation,Odd,2025
+C9,5,,TM-504,Indian Culture and Heritage,Odd,2025
+C9,5,,TM-505,Adventure Tourism,Odd,2025
+C9,5,,TM-506,Disaster Management,Odd,2025
+C9,7,,TM-701,Research Methodology,Odd,2025
+C9,7,,TM-702,Geography of Global Tourism,Odd,2025
+C9,7,,TM- 703,Tour Operations II,Odd,2025
+C9,7,,TM-704,E Commerce for Tourism,Odd,2025
+C9,7,,TM-705,Logistics and Supply Chain Management,Odd,2025
+C9,7,,TM-706,Tourism Law ,Odd,2025
+C9,9,,TM-901,DMS,Odd,2025
+C9,9,,TM-902,Foreign Exchange Management,Odd,2025
+C9,9,,TM- 903,Service Marketing Strategies,Odd,2025
+C9,9,,TM-904,Travel Media Management,Odd,2025
+C9,9,,TM-905,Destination Planning and Development,Odd,2025
+C9,9,,TM-906,Business Ethics and Corporate Governance,Odd,2025

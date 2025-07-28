@@ -6,7 +6,7 @@ const SubjectSchema = new mongoose.Schema({
   Specialization: { type: String },
   Sub_Code: { type: String, required: true, unique: true },
   Sub_Name: { type: String, required: true },
-  Semester: { type: String, enum: ['odd', 'even'], required: true },
+  Semester: { type: String, enum: ['odd', 'even'],lowercase: true, required: true },
   Year: { type: String, required: true },
 });
 
