@@ -80,10 +80,15 @@ exports.getStudentsByCourseAndSemester = async (req, res) => {
     console.log('Final query:', JSON.stringify(query));
 
     // Step 5: Fetch and return students
-    const students = await Student.aggregate([
+  const students = await Student.aggregate([
   { $match: query },
   {
     $addFields: {
+      yearPart: {
+        $toInt: {
+          $substr: [ { $arrayElemAt: [ { $split: ["$rollNumber", "-"] }, 1 ] }, 2, 2 ] // gets '21' from '2K21'
+        }
+      },
       numericRoll: {
         $toInt: {
           $arrayElemAt: [ { $split: ["$rollNumber", "-"] }, 2 ]
@@ -91,9 +96,10 @@ exports.getStudentsByCourseAndSemester = async (req, res) => {
       }
     }
   },
-  { $sort: { numericRoll: 1 } },
-  { $project: { numericRoll: 0 } }
+  { $sort: { yearPart: 1, numericRoll: 1 } },
+  { $project: { yearPart: 0, numericRoll: 0 } }
 ]);
+
 
 
     return res.status(200).json(students);
