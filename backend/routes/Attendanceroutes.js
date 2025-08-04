@@ -1,7 +1,6 @@
 const express = require("express");
 const { getStudentsByCourseAndSemester, submitAttendance, getAttendanceByCourseAndSubject, getStudentById, getStudentAttendanceDetail, sendLowAttendanceNotifications, getSubjects } = require("../controllers/AttendanceController");
 
-
 const router = express.Router();
 
 router.post("/getByCourseAndSemester", getStudentsByCourseAndSemester);

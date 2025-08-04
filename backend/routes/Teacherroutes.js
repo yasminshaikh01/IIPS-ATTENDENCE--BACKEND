@@ -14,6 +14,7 @@ const {
   
 } = require("../controllers/TeacherController");
 const { uploadStudentsFromCSV, uploadCoursesFromCSV, uploadSubjectsFromCSV, uploadTeachersFromCSV } = require("../controllers/FeedStudents");
+const { getAllUnmarkedAttendanceReport } = require("../controllers/ReportController");
 const router = express.Router();
 
 router.post("/login", login);
@@ -30,5 +31,8 @@ router.post("/upload-students",uploadStudentsFromCSV);
 router.post("/upload-courses",uploadCoursesFromCSV);
 router.post("/upload-subjects",uploadSubjectsFromCSV);
 router.post("/upload-teachers",uploadTeachersFromCSV);
+
+//summary
+router.get('/getMissingSubjectSummary', getAllUnmarkedAttendanceReport);
 
 module.exports = router;
