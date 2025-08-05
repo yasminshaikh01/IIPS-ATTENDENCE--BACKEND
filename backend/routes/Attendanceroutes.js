@@ -1,7 +1,9 @@
 const express = require("express");
 const { getStudentsByCourseAndSemester, submitAttendance, getAttendanceByCourseAndSubject, getStudentById, getStudentAttendanceDetail, sendLowAttendanceNotifications, getSubjects } = require("../controllers/AttendanceController");
+const verifyToken = require("../middleware/verifyToken");
 
 const router = express.Router();
+router.use(verifyToken);
 
 router.post("/getByCourseAndSemester", getStudentsByCourseAndSemester);
 router.post("/markattendance", submitAttendance);

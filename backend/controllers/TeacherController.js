@@ -6,7 +6,8 @@ const {
 } = require("../config/nodemailer");
 const bcrypt = require("bcryptjs");
 const crypto = require("crypto");
-const { log } = require("console");
+const jwt = require("jsonwebtoken");
+const secret = process.env.SECRET_KEY || "your_secret_key";
 
 const signUp = async (req, res) => {
   const { name, email, mobileNumber, password } = req.body;
@@ -105,10 +106,22 @@ const login = async (req, res) => {
 
     teacher.sessions.push({ sessionId, expiresAt });
     await teacher.save();
+     // Generate JWT token valid for 8 hours
+    const token = jwt.sign(
+      {
+        teacherId: teacher._id,
+        email: teacher.email,
+        name: teacher.name,
+      },
+      secret,
+      { expiresIn: "8h" }
+    );
+
 
     res.status(200).json({
       message: "Login successful",
       sessionId,
+      token, 
       teacherId: teacher._id,
       name: teacher.name,
       email: teacher.email,

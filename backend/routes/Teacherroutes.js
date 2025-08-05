@@ -16,6 +16,7 @@ const {
 } = require("../controllers/TeacherController");
 const { uploadStudentsFromCSV, uploadCoursesFromCSV, uploadSubjectsFromCSV, uploadTeachersFromCSV } = require("../controllers/FeedStudents");
 const { getAllUnmarkedAttendanceReport } = require("../controllers/ReportController");
+const verifyToken = require("../middleware/verifyToken");
 const router = express.Router();
 
 router.post("/login", login);
@@ -29,12 +30,12 @@ router.post("/getteacherDetails",getTeacherDetailsById);
 router.post("/edit",updateTeacherDetailsById);
 
 // Feed
-router.post("/upload-students",uploadStudentsFromCSV);
-router.post("/upload-courses",uploadCoursesFromCSV);
-router.post("/upload-subjects",uploadSubjectsFromCSV);
-router.post("/upload-teachers",uploadTeachersFromCSV);
+router.post("/upload-students",verifyToken,uploadStudentsFromCSV);
+router.post("/upload-courses",verifyToken,uploadCoursesFromCSV);
+router.post("/upload-subjects",verifyToken,uploadSubjectsFromCSV);
+router.post("/upload-teachers",verifyToken,uploadTeachersFromCSV);
 
 //summary
-router.get('/getMissingSubjectSummary', getAllUnmarkedAttendanceReport);
+router.get('/getMissingSubjectSummary',verifyToken, getAllUnmarkedAttendanceReport);
 
 module.exports = router;
