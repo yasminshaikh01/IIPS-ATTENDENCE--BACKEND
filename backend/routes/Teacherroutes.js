@@ -9,6 +9,7 @@ const {
   resetPassword,
 
   getTeacherDetailsById,
+  updateTeacherDetailsById,
 
 
   
@@ -25,6 +26,7 @@ router.post("/verify-session", verifySession);
 router.post("/forgot-password", forgotPassword);
 router.post("/reset-password", resetPassword);
 router.post("/getteacherDetails",getTeacherDetailsById);
+router.post("/edit",updateTeacherDetailsById);
 
 // Feed
 router.post("/upload-students",uploadStudentsFromCSV);

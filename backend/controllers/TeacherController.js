@@ -274,6 +274,31 @@ const getTeacherDetailsById = async (req, res) => {
   }
 };
 
+const updateTeacherDetailsById = async (req, res) => {
+  const { teacherId, name, mobile_no, password, email } = req.body;
+
+  let updateFields = { name, mobileNumber: mobile_no, email }; // Starting with name, email and mobile
+
+  // Hash the password only if it's provided
+  if (password) {
+    const hashedPassword = await bcrypt.hash(password, 10);
+    updateFields.password = hashedPassword;
+  }
+  try {
+    const teacher = await Teacher.findOneAndUpdate(
+      { _id: teacherId },
+      updateFields, // Only the fields that need to be updated
+    );
+
+    if (!teacher) {
+      return res.status(404).json({ error: "Teacher not found" });
+    }
+    res.status(200).json({ message: "Teacher updated successfully", teacher });
+  } catch (error) {
+    res.status(500).json({ error: "Server error" });
+  }
+};
+
 module.exports = {
   login,
   // verifyOtp,
@@ -282,5 +307,6 @@ module.exports = {
   verifyOtppasscode,
   forgotPassword,
   resetPassword,
+  updateTeacherDetailsById,
   getTeacherDetailsById,
 };
