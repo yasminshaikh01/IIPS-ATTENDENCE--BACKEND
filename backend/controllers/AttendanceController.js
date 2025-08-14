@@ -577,3 +577,143 @@ exports.sendLowAttendanceNotifications = async (req, res) => {
       throw error;
     }
   }
+
+// delete attendance 
+exports.deleteAttendance = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const { courseId, semId, subjectCode, date, specialization, section } = req.body;
+
+    // Validate required fields
+    if (!courseId || !semId || !subjectCode || !date) {
+      return res.status(400).json({ message: 'courseId, semId, subjectCode, and date are required' });
+    }
+
+  
+
+    console.log('Deleting attendance for:', {
+      courseId, 
+      semId, 
+      subjectCode, 
+      date, 
+      specialization, 
+      section
+    });
+
+    const academicYear = getCurrentAcademicYear();
+    const targetDate = new Date(date);
+
+    // Find all students that match the criteria
+    const studentQuery = {};
+    
+    if (specialization && specialization.trim() !== '') {
+      studentQuery.specializations = { $in: [specialization] };
+    }
+    
+    if (section && section.trim() !== '') {
+      studentQuery.section = section;
+    }
+
+    const students = await Student.find(studentQuery).session(session);
+    
+    if (students.length === 0) {
+      return res.status(404).json({ message: 'No students found matching the criteria' });
+    }
+
+    let deletedCount = 0;
+    let updatedSummaries = 0;
+
+    for (const student of students) {
+      const studentId = student._id;
+
+      // Find attendance record for this student and subject
+      const attendanceRecord = await Attendance.findOne({
+        studentId,
+        subjectCode
+      }).session(session);
+
+      if (!attendanceRecord) {
+        console.log(`No attendance record found for student ${studentId}`);
+        continue;
+      }
+
+      // Find the specific date record
+      const recordIndex = attendanceRecord.records.findIndex(record => 
+        record.date.toDateString() === targetDate.toDateString()
+      );
+
+      if (recordIndex === -1) {
+        console.log(`No attendance record found for student ${studentId} on date ${date}`);
+        continue;
+      }
+
+      // Get the attendance status before deletion (for summary update)
+      const wasPresent = attendanceRecord.records[recordIndex].present;
+
+      // Remove the specific date record
+      attendanceRecord.records.splice(recordIndex, 1);
+
+      // If no more records exist, delete the entire attendance document
+      if (attendanceRecord.records.length === 0) {
+        await Attendance.deleteOne({ _id: attendanceRecord._id }).session(session);
+        console.log(`Deleted entire attendance record for student ${studentId}`);
+      } else {
+        await attendanceRecord.save({ session });
+        console.log(`Removed date record for student ${studentId}`);
+      }
+
+      deletedCount++;
+
+      // Update attendance summary
+      const summary = await AttendanceSummary.findOne({
+        studentId,
+        courseId,
+        semId,
+        subjectCode,
+        academicYear
+      }).session(session);
+
+      if (summary) {
+        // Decrease total classes
+        summary.totalClasses = Math.max(0, summary.totalClasses - 1);
+        
+        // Decrease attended classes if student was present
+        if (wasPresent) {
+          summary.attendedClasses = Math.max(0, summary.attendedClasses - 1);
+        }
+
+        // Recalculate percentage
+        if (summary.totalClasses === 0) {
+          // If no classes left, delete the summary
+          await AttendanceSummary.deleteOne({ _id: summary._id }).session(session);
+          console.log(`Deleted attendance summary for student ${studentId}`);
+        } else {
+          summary.attendancePercentage = parseFloat(
+            ((summary.attendedClasses / summary.totalClasses) * 100).toFixed(2)
+          );
+          summary.lastUpdated = new Date();
+          await summary.save({ session });
+          updatedSummaries++;
+          console.log(`Updated attendance summary for student ${studentId}`);
+        }
+      }
+    }
+
+    await session.commitTransaction();
+    session.endSession();
+
+    return res.status(200).json({ 
+      message: 'Attendance deleted successfully',
+      deletedRecords: deletedCount,
+      updatedSummaries: updatedSummaries
+    });
+
+  } catch (error) {
+    await session.abortTransaction();
+    session.endSession();
+    console.error('Error deleting attendance:', error);
+    return res.status(500).json({ message: 'Server error' });
+  }
+};
