@@ -30,7 +30,7 @@ router.post("/reset-password", resetPassword);
 router.post("/getteacherDetails",getTeacherDetailsById);
 router.post("/edit",updateTeacherDetailsById);
 
-// Feed
+// Feed checking
 router.post("/upload-students",verifyToken,uploadStudentsFromCSV);
 router.post("/upload-courses",verifyToken,uploadCoursesFromCSV);
 router.post("/upload-subjects",verifyToken,uploadSubjectsFromCSV);
