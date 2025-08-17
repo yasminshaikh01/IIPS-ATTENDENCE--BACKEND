@@ -603,7 +603,7 @@ exports.deleteAttendance = async (req, res) => {
     });
 
     const academicYear = getCurrentAcademicYear();
-    const targetDate = new Date(date);
+  const targetDate = new Date(date + 'T00:00:00.000Z');
 
     // Find all students that match the criteria
     const studentQuery = {};
@@ -714,6 +714,196 @@ exports.deleteAttendance = async (req, res) => {
     await session.abortTransaction();
     session.endSession();
     console.error('Error deleting attendance:', error);
+    return res.status(500).json({ message: 'Server error' });
+  }
+};
+
+//merge attendance
+exports.mergeAttendance = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const { courseId, semId, subjectCode, date, specialization, section, finalCount } = req.body;
+
+    // Validate required fields
+    if (!courseId || !semId || !subjectCode || !date || !finalCount) {
+      return res.status(400).json({ 
+        message: 'courseId, semId, subjectCode, date, and finalCount are required' 
+      });
+    }
+
+    if (finalCount < 1) {
+      return res.status(400).json({ 
+        message: 'finalCount must be at least 1' 
+      });
+    }
+
+    console.log('Merging attendance for:', {
+      courseId, 
+      semId, 
+      subjectCode, 
+      date, 
+      specialization, 
+      section,
+      finalCount
+    });
+
+    const academicYear = getCurrentAcademicYear();
+    // Convert date string (YYYY-MM-DD) to Date object for comparison
+    const targetDate = new Date(date + 'T00:00:00.000Z');
+
+    // Find all students that match the criteria
+    const studentQuery = {};
+    
+    if (specialization && specialization.trim() !== '') {
+      studentQuery.specializations = { $in: [specialization] };
+    }
+    
+    if (section && section.trim() !== '') {
+      studentQuery.section = section;
+    }
+
+    const students = await Student.find(studentQuery).session(session);
+    
+    if (students.length === 0) {
+      return res.status(404).json({ message: 'No students found matching the criteria' });
+    }
+
+    let processedStudents = 0;
+    let updatedSummaries = 0;
+    let mergeStats = {
+      studentsWithRecords: 0,
+      totalRecordsRemoved: 0,
+      presentRecordsKept: 0,
+      absentRecordsKept: 0
+    };
+
+    for (const student of students) {
+      const studentId = student._id;
+
+      // Find attendance record for this student and subject
+      const attendanceRecord = await Attendance.findOne({
+        studentId,
+        subjectCode
+      }).session(session);
+
+      if (!attendanceRecord) {
+        console.log(`No attendance record found for student ${studentId}`);
+        continue;
+      }
+
+      // Find all records for the target date
+      const dateRecords = attendanceRecord.records.filter(record => 
+        record.date.toDateString() === targetDate.toDateString()
+      );
+
+      if (dateRecords.length === 0) {
+        console.log(`No attendance records found for student ${studentId} on date ${date}`);
+        continue;
+      }
+
+      if (dateRecords.length <= finalCount) {
+        console.log(`Student ${studentId} already has ${dateRecords.length} records (≤ ${finalCount}), no merge needed`);
+        continue;
+      }
+
+      mergeStats.studentsWithRecords++;
+      
+      // Separate present and absent records
+      const presentRecords = dateRecords.filter(record => record.present === true);
+      const absentRecords = dateRecords.filter(record => record.present === false);
+
+      console.log(`Student ${studentId}: ${presentRecords.length} present, ${absentRecords.length} absent records`);
+
+      // Determine how many to keep of each type
+      let keepPresent = Math.min(presentRecords.length, finalCount);
+      let keepAbsent = Math.max(0, finalCount - keepPresent);
+
+      // If we have more absent records than we need, adjust
+      if (keepAbsent > absentRecords.length) {
+        keepAbsent = absentRecords.length;
+        keepPresent = finalCount - keepAbsent;
+      }
+
+      console.log(`Student ${studentId}: Keeping ${keepPresent} present, ${keepAbsent} absent records`);
+
+      // Create the final records array for this date
+      const finalRecords = [
+        ...presentRecords.slice(0, keepPresent),
+        ...absentRecords.slice(0, keepAbsent)
+      ];
+
+      mergeStats.presentRecordsKept += keepPresent;
+      mergeStats.absentRecordsKept += keepAbsent;
+      mergeStats.totalRecordsRemoved += (dateRecords.length - finalRecords.length);
+
+      // Remove all records for this date
+      attendanceRecord.records = attendanceRecord.records.filter(record => 
+        record.date.toDateString() !== targetDate.toDateString()
+      );
+
+      // Add back the final records
+      attendanceRecord.records.push(...finalRecords);
+
+      await attendanceRecord.save({ session });
+      processedStudents++;
+
+      // Update attendance summary
+      const summary = await AttendanceSummary.findOne({
+        studentId,
+        courseId,
+        semId,
+        subjectCode,
+        academicYear
+      }).session(session);
+
+      if (summary) {
+        // Calculate the difference in classes and attendance
+        const originalTotalClasses = dateRecords.length;
+        const originalPresentClasses = presentRecords.length;
+        const newTotalClasses = finalRecords.length;
+        const newPresentClasses = finalRecords.filter(r => r.present).length;
+
+        // Update summary
+        summary.totalClasses -= (originalTotalClasses - newTotalClasses);
+        summary.attendedClasses -= (originalPresentClasses - newPresentClasses);
+
+        // Ensure non-negative values
+        summary.totalClasses = Math.max(0, summary.totalClasses);
+        summary.attendedClasses = Math.max(0, summary.attendedClasses);
+
+        // Recalculate percentage
+        if (summary.totalClasses === 0) {
+          summary.attendancePercentage = 0;
+        } else {
+          summary.attendancePercentage = parseFloat(
+            ((summary.attendedClasses / summary.totalClasses) * 100).toFixed(2)
+          );
+        }
+
+        summary.lastUpdated = new Date();
+        await summary.save({ session });
+        updatedSummaries++;
+
+        console.log(`Updated summary for student ${studentId}: ${summary.attendedClasses}/${summary.totalClasses} (${summary.attendancePercentage}%)`);
+      }
+    }
+
+    await session.commitTransaction();
+    session.endSession();
+
+    return res.status(200).json({ 
+      message: 'Attendance merged successfully',
+      processedStudents: processedStudents,
+      updatedSummaries: updatedSummaries,
+      mergeStatistics: mergeStats
+    });
+
+  } catch (error) {
+    await session.abortTransaction();
+    session.endSession();
+    console.error('Error merging attendance:', error);
     return res.status(500).json({ message: 'Server error' });
   }
 };
