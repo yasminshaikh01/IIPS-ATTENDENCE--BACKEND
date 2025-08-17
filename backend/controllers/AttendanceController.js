@@ -99,6 +99,7 @@ exports.getStudentsByCourseAndSemester = async (req, res) => {
   }
 };
 
+
 // Submit new attendance
 const getCurrentAcademicYear = () => {
   const year = new Date().getFullYear();
