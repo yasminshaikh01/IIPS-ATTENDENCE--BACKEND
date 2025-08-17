@@ -126,100 +126,54 @@ exports.submitAttendance = async (req, res) => {
       return res.status(400).json({ message: 'All fields are required' });
     }
 
-    const course = await Course.findOne({ 
-      Course_Name: courseName 
-    });
+    const course = await Course.findOne({ Course_Name: courseName });
     const courseId = course ? course.Course_Id : null;
-    
-    console.log('Received attendance data:', {
-      courseId, 
-      semId, 
-      subjectCode, 
-      date, 
-      specialization, 
-      section,
-      attendanceCount: attendance.length
-    });
-
     const academicYear = getCurrentAcademicYear();
 
-    for (const record of attendance) {
-      const { studentId, present } = record;
-      if (!studentId) continue;
+    // 1️⃣ Validate students in bulk
+    const validStudents = await Student.find({
+      _id: { $in: attendance.map(a => a.studentId) },
+      ...(specialization ? { specializations: { $in: [specialization] } } : {}),
+      ...(section ? { section } : {})
+    }).session(session);
 
-      console.log('Processing attendance for student:', studentId, 'Present:', present);
+    const validStudentIds = new Set(validStudents.map(s => s._id.toString()));
 
-      // Verify student exists and matches optional filters
-      const studentQuery = { _id: studentId };
-      
-      if (specialization && specialization.trim() !== '') {
-        studentQuery.specializations = { $in: [specialization] };
-      }
-      
-      if (section && section.trim() !== '') {
-        studentQuery.section = section;
-      }
+    // 2️⃣ Bulk insert into Attendance
+    const attendanceOps = attendance
+      .filter(r => validStudentIds.has(r.studentId.toString()))
+      .map(r => ({
+        updateOne: {
+          filter: { studentId: r.studentId, subjectCode },
+          update: {
+            $setOnInsert: { studentId: r.studentId, subjectCode },
+            $push: { records: { date: new Date(date), present: r.present } }
+          },
+          upsert: true
+        }
+      }));
 
-      const studentExists = await Student.findOne(studentQuery).session(session);
-      
-      if (!studentExists) {
-        console.log(`Student ${studentId} not found or doesn't match filters. Skipping.`);
-        continue;
-      }
+    if (attendanceOps.length > 0) {
+      await Attendance.bulkWrite(attendanceOps, { session });
+    }
 
-      // Store attendance detail
-      await Attendance.updateOne(
-        {
-          studentId,
-          subjectCode
-        },
-        {
-          $setOnInsert: { studentId, subjectCode },
-          $push: {
-            records: {
-              date: new Date(date),
-              present
-            }
-          }
-        },
-        { upsert: true, session }
-      );
+    // 3️⃣ Bulk insert/update AttendanceSummary
+    const summaryOps = attendance
+      .filter(r => validStudentIds.has(r.studentId.toString()))
+      .map(r => ({
+        updateOne: {
+          filter: { studentId: r.studentId, courseId, semId, subjectCode, academicYear },
+          update: {
+            $inc: { totalClasses: 1, attendedClasses: r.present ? 1 : 0 },
+            $set: { lastUpdated: new Date() },
+            $setOnInsert: { studentId: r.studentId, courseId, semId, subjectCode, academicYear }
+          },
+          upsert: true
+        }
+      }));
 
-      console.log('Attendance record updated for student:', studentId);
-
-      // Update or create summary
-      let summary = await AttendanceSummary.findOne({
-        studentId,
-        courseId,
-        semId,
-        subjectCode,
-        academicYear
-      }).session(session);
-
-      console.log('Attendance summary found:', summary ? 'Yes' : 'No', 'for student:', studentId);
-
-      if (!summary) {
-        summary = new AttendanceSummary({
-          studentId,
-          courseId,
-          semId,
-          subjectCode,
-          academicYear,
-          totalClasses: 1,
-          attendedClasses: present ? 1 : 0,
-          attendancePercentage: present ? 100 : 0
-        });
-        console.log('New attendance summary created for student:', studentId);
-      } else {
-        summary.totalClasses += 1;
-        if (present) summary.attendedClasses += 1;
-        summary.attendancePercentage = parseFloat(
-          ((summary.attendedClasses / summary.totalClasses) * 100).toFixed(2)
-        );
-        summary.lastUpdated = new Date();
-      }
-
-      await summary.save({ session });
+    if (summaryOps.length > 0) {
+      await AttendanceSummary.bulkWrite(summaryOps, { session });
     }
 
     await session.commitTransaction();
@@ -233,6 +187,7 @@ exports.submitAttendance = async (req, res) => {
     return res.status(500).json({ message: 'Server error' });
   }
 };
+
 
 // Get attendance by course, semester, subject, and academic year with optional filters
 exports.getAttendanceByCourseAndSubject = async (req, res) => {
