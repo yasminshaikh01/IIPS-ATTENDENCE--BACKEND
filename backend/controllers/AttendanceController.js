@@ -246,7 +246,6 @@ exports.getAttendanceByCourseAndSubject = async (req, res) => {
       semId: semester
     };
 
-    // Add optional filters
     if (specialization && specialization.trim() !== '') {
       studentQuery.specializations = { $in: [specialization] };
     }
@@ -261,45 +260,51 @@ exports.getAttendanceByCourseAndSubject = async (req, res) => {
     const students = await Student.find(studentQuery);
 
     if (students.length === 0) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         message: 'No students found for this course, semester, and filters',
         filters: { course, semester, specialization, section }
       });
     }
 
-    const attendanceSummaries = [];
+    const studentIds = students.map(s => s._id);
 
-    // Convert start and end dates to Date objects if provided
-    const fromDate = startDate ? new Date(startDate) : null;
-    const toDate = endDate ? new Date(endDate) : null;
+    // Step 3: Build aggregation pipeline
+    const pipeline = [
+      { $match: { studentId: { $in: studentIds }, subjectCode: subject } },
+      { $unwind: "$records" },
+    ];
 
-    // Step 3: Process each student's attendance
-    for (const student of students) {
-      const attendanceDoc = await Attendance.findOne({
-        studentId: student._id,
-        subjectCode: subject
-      });
+    // Apply date filter if provided
+    if (startDate || endDate) {
+      const dateFilter = {};
+      if (startDate) dateFilter.$gte = new Date(startDate);
+      if (endDate) dateFilter.$lte = new Date(endDate);
+      pipeline.push({ $match: { "records.date": dateFilter } });
+    }
 
-      let attended = 0;
-      let total = 0;
-
-      if (attendanceDoc?.records) {
-        let filteredRecords = attendanceDoc.records;
-
-        if (fromDate && toDate) {
-          filteredRecords = filteredRecords.filter(record => {
-            const recordDate = new Date(record.date);
-            return recordDate >= fromDate && recordDate <= toDate;
-          });
-        }
-
-        total = filteredRecords.length;
-        attended = filteredRecords.filter(record => record.present).length;
+    // Group by studentId and calculate totals
+    pipeline.push({
+      $group: {
+        _id: "$studentId",
+        total: { $sum: 1 },
+        attended: { $sum: { $cond: ["$records.present", 1, 0] } }
       }
+    });
 
-      console.log(`Attendance for student ${student.fullName} (${student._id}): ${attended}/${total}`);
+    const aggregated = await Attendance.aggregate(pipeline);
 
-      attendanceSummaries.push({
+    // Step 4: Map aggregation results back to students
+    const attendanceMap = new Map();
+    aggregated.forEach(doc => {
+      attendanceMap.set(doc._id.toString(), {
+        attended: doc.attended,
+        total: doc.total
+      });
+    });
+
+    const attendanceSummaries = students.map(student => {
+      const summary = attendanceMap.get(student._id.toString()) || { attended: 0, total: 0 };
+      return {
         studentId: student._id,
         studentName: student.fullName,
         rollNumber: student.rollNumber,
@@ -309,11 +314,11 @@ exports.getAttendanceByCourseAndSubject = async (req, res) => {
         section: student.section || '',
         subjectCode: subject,
         academicYear,
-        classesAttended: attended,
-        totalClasses: total,
-        attendancePercentage: total > 0 ? Math.round((attended / total) * 100) : 0
-      });
-    }
+        classesAttended: summary.attended,
+        totalClasses: summary.total,
+        attendancePercentage: summary.total > 0 ? Math.round((summary.attended / summary.total) * 100) : 0
+      };
+    });
 
     // Sort by roll number
     attendanceSummaries.sort((a, b) => {
