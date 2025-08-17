@@ -43,69 +43,59 @@ exports.getSubjects = async (req, res) => {
 };
 
 // Get students by course and semester
-// Get students by course and semester
+// Get students by course and semester (optimized)
 exports.getStudentsByCourseAndSemester = async (req, res) => {
   try {
     const { className, semester_id, specialization, section } = req.body;
 
     if (!className || !semester_id) {
-      return res.status(400).json({ message: 'Class name and semester ID are required' });
+      return res.status(400).json({ message: "Class name and semester ID are required" });
     }
 
-    // Step 1: Find the course using className (Course_Name)
-    const course = await Course.findOne({ Course_Name: className });
-
+    // Step 1: Get course ID directly
+    const course = await Course.findOne({ Course_Name: className }, { Course_Id: 1 }).lean();
     if (!course) {
-      return res.status(404).json({ message: 'Course not found' });
+      return res.status(404).json({ message: "Course not found" });
     }
 
-    console.log('Course found:', course.Course_Id, 'for className:', className, semester_id);
-
-    // Step 2: Build the query
+    // Step 2: Build query
     const query = {
       courseId: course.Course_Id,
       semId: semester_id
     };
-
-    // Step 3: Add specialization condition if provided
-    if (specialization && specialization.trim() !== '') {
-      query.specializations = { $in: [specialization] }; // Check if specialization exists in array
+    if (specialization?.trim()) {
+      query.specializations = specialization; // no need for $in if it's a single value
     }
-
-    // Step 4: Add section condition if provided
-    if (section && section.trim() !== '') {
+    if (section?.trim()) {
       query.section = section;
     }
 
-    console.log('Final query:', JSON.stringify(query));
-
-    // Step 5: Fetch and return students
-  const students = await Student.aggregate([
-  { $match: query },
-  {
-    $addFields: {
-      yearPart: {
-        $toInt: {
-          $substr: [ { $arrayElemAt: [ { $split: ["$rollNumber", "-"] }, 1 ] }, 2, 2 ] // gets '21' from '2K21'
+    // Step 3: Aggregation
+    const students = await Student.aggregate([
+      { $match: query },
+      {
+        $set: {
+          splitRoll: { $split: ["$rollNumber", "-"] }
         }
       },
-      numericRoll: {
-        $toInt: {
-          $arrayElemAt: [ { $split: ["$rollNumber", "-"] }, 2 ]
+      {
+        $set: {
+          yearPart: {
+            $toInt: { $substr: [{ $arrayElemAt: ["$splitRoll", 1] }, 2, 2] }
+          },
+          numericRoll: {
+            $toInt: { $arrayElemAt: ["$splitRoll", 2] }
+          }
         }
-      }
-    }
-  },
-  { $sort: { yearPart: 1, numericRoll: 1 } },
-  { $project: { yearPart: 0, numericRoll: 0 } }
-]);
-
-
+      },
+      { $sort: { yearPart: 1, numericRoll: 1 } },
+      { $unset: ["yearPart", "numericRoll", "splitRoll"] }
+    ]);
 
     return res.status(200).json(students);
   } catch (error) {
-    console.error('Error fetching students:', error);
-    return res.status(500).json({ message: 'Server error' });
+    console.error("Error fetching students:", error);
+    return res.status(500).json({ message: "Server error" });
   }
 };
 
@@ -538,332 +528,305 @@ exports.sendLowAttendanceNotifications = async (req, res) => {
     }
   }
 
-// delete attendance 
+// delete attendance (optimized)
 exports.deleteAttendance = async (req, res) => {
   const session = await mongoose.startSession();
-  session.startTransaction();
 
   try {
     const { courseId, semId, subjectCode, date, specialization, section } = req.body;
 
-    // Validate required fields
     if (!courseId || !semId || !subjectCode || !date) {
       return res.status(400).json({ message: 'courseId, semId, subjectCode, and date are required' });
     }
 
-  
-
-    console.log('Deleting attendance for:', {
-      courseId, 
-      semId, 
-      subjectCode, 
-      date, 
-      specialization, 
-      section
-    });
-
     const academicYear = getCurrentAcademicYear();
-  const targetDate = new Date(date + 'T00:00:00.000Z');
+    const targetDate = new Date(date + 'T00:00:00.000Z');
 
-    // Find all students that match the criteria
+    // Step 1: Build student filter (optional filters applied here)
     const studentQuery = {};
-    
     if (specialization && specialization.trim() !== '') {
       studentQuery.specializations = { $in: [specialization] };
     }
-    
     if (section && section.trim() !== '') {
       studentQuery.section = section;
     }
 
-    const students = await Student.find(studentQuery).session(session);
-    
+    const students = await Student.find(studentQuery, { _id: 1 }).lean();
     if (students.length === 0) {
       return res.status(404).json({ message: 'No students found matching the criteria' });
     }
 
-    let deletedCount = 0;
-    let updatedSummaries = 0;
+    const studentIds = students.map(s => s._id);
 
-    for (const student of students) {
-      const studentId = student._id;
-
-      // Find attendance record for this student and subject
-      const attendanceRecord = await Attendance.findOne({
-        studentId,
-        subjectCode
-      }).session(session);
-
-      if (!attendanceRecord) {
-        console.log(`No attendance record found for student ${studentId}`);
-        continue;
-      }
-
-      // Find the specific date record
-      const recordIndex = attendanceRecord.records.findIndex(record => 
-        record.date.toDateString() === targetDate.toDateString()
-      );
-
-      if (recordIndex === -1) {
-        console.log(`No attendance record found for student ${studentId} on date ${date}`);
-        continue;
-      }
-
-      // Get the attendance status before deletion (for summary update)
-      const wasPresent = attendanceRecord.records[recordIndex].present;
-
-      // Remove the specific date record
-      attendanceRecord.records.splice(recordIndex, 1);
-
-      // If no more records exist, delete the entire attendance document
-      if (attendanceRecord.records.length === 0) {
-        await Attendance.deleteOne({ _id: attendanceRecord._id }).session(session);
-        console.log(`Deleted entire attendance record for student ${studentId}`);
-      } else {
-        await attendanceRecord.save({ session });
-        console.log(`Removed date record for student ${studentId}`);
-      }
-
-      deletedCount++;
-
-      // Update attendance summary
-      const summary = await AttendanceSummary.findOne({
-        studentId,
-        courseId,
-        semId,
+    // Step 2: Start transaction
+    await session.withTransaction(async () => {
+      // --- A) Remove attendance records for the given date ---
+      const attendances = await Attendance.find({
+        studentId: { $in: studentIds },
         subjectCode,
-        academicYear
+        "records.date": targetDate
       }).session(session);
 
-      if (summary) {
-        // Decrease total classes
-        summary.totalClasses = Math.max(0, summary.totalClasses - 1);
-        
-        // Decrease attended classes if student was present
-        if (wasPresent) {
-          summary.attendedClasses = Math.max(0, summary.attendedClasses - 1);
-        }
+      if (attendances.length === 0) {
+        throw new Error("No attendance records found for given date");
+      }
 
-        // Recalculate percentage
-        if (summary.totalClasses === 0) {
-          // If no classes left, delete the summary
-          await AttendanceSummary.deleteOne({ _id: summary._id }).session(session);
-          console.log(`Deleted attendance summary for student ${studentId}`);
+      let deletedCount = 0;
+      let updatedSummaries = 0;
+      const attendanceOps = [];
+      const summaryOps = [];
+
+      for (const att of attendances) {
+        const recordIndex = att.records.findIndex(r => r.date.toDateString() === targetDate.toDateString());
+        if (recordIndex === -1) continue;
+
+        const wasPresent = att.records[recordIndex].present;
+        att.records.splice(recordIndex, 1);
+
+        if (att.records.length === 0) {
+          attendanceOps.push({
+            deleteOne: { filter: { _id: att._id } }
+          });
         } else {
-          summary.attendancePercentage = parseFloat(
-            ((summary.attendedClasses / summary.totalClasses) * 100).toFixed(2)
-          );
-          summary.lastUpdated = new Date();
-          await summary.save({ session });
-          updatedSummaries++;
-          console.log(`Updated attendance summary for student ${studentId}`);
+          attendanceOps.push({
+            updateOne: {
+              filter: { _id: att._id },
+              update: { $set: { records: att.records } }
+            }
+          });
+        }
+        deletedCount++;
+
+        // --- B) Update summaries ---
+        const summary = await AttendanceSummary.findOne({
+          studentId: att.studentId,
+          courseId,
+          semId,
+          subjectCode,
+          academicYear
+        }).session(session);
+
+        if (summary) {
+          summary.totalClasses = Math.max(0, summary.totalClasses - 1);
+          if (wasPresent) summary.attendedClasses = Math.max(0, summary.attendedClasses - 1);
+
+          if (summary.totalClasses === 0) {
+            summaryOps.push({ deleteOne: { filter: { _id: summary._id } } });
+          } else {
+            summaryOps.push({
+              updateOne: {
+                filter: { _id: summary._id },
+                update: {
+                  $set: {
+                    totalClasses: summary.totalClasses,
+                    attendedClasses: summary.attendedClasses,
+                    attendancePercentage: parseFloat(((summary.attendedClasses / summary.totalClasses) * 100).toFixed(2)),
+                    lastUpdated: new Date()
+                  }
+                }
+              }
+            });
+            updatedSummaries++;
+          }
         }
       }
-    }
 
-    await session.commitTransaction();
-    session.endSession();
+      // --- C) Execute bulk ops ---
+      if (attendanceOps.length > 0) {
+        await Attendance.bulkWrite(attendanceOps, { session });
+      }
+      if (summaryOps.length > 0) {
+        await AttendanceSummary.bulkWrite(summaryOps, { session });
+      }
 
-    return res.status(200).json({ 
-      message: 'Attendance deleted successfully',
-      deletedRecords: deletedCount,
-      updatedSummaries: updatedSummaries
-    });
+      // Respond inside transaction block only if success
+      res.status(200).json({
+        message: "Attendance deleted successfully",
+        deletedRecords: deletedCount,
+        updatedSummaries
+      });
+    }, { maxCommitTimeMS: 120000 });
 
   } catch (error) {
-    await session.abortTransaction();
+    console.error("Error deleting attendance:", error);
+    return res.status(500).json({ message: error.message });
+  } finally {
     session.endSession();
-    console.error('Error deleting attendance:', error);
-    return res.status(500).json({ message: 'Server error' });
   }
 };
 
-//merge attendance
+// merge attendance (optimized, max present kept)
 exports.mergeAttendance = async (req, res) => {
   const session = await mongoose.startSession();
-  session.startTransaction();
 
   try {
     const { courseId, semId, subjectCode, date, specialization, section, finalCount } = req.body;
 
-    // Validate required fields
     if (!courseId || !semId || !subjectCode || !date || !finalCount) {
-      return res.status(400).json({ 
-        message: 'courseId, semId, subjectCode, date, and finalCount are required' 
+      return res.status(400).json({
+        message: "courseId, semId, subjectCode, date, and finalCount are required"
       });
     }
 
     if (finalCount < 1) {
-      return res.status(400).json({ 
-        message: 'finalCount must be at least 1' 
-      });
+      return res.status(400).json({ message: "finalCount must be at least 1" });
     }
-
-    console.log('Merging attendance for:', {
-      courseId, 
-      semId, 
-      subjectCode, 
-      date, 
-      specialization, 
-      section,
-      finalCount
-    });
 
     const academicYear = getCurrentAcademicYear();
-    // Convert date string (YYYY-MM-DD) to Date object for comparison
-    const targetDate = new Date(date + 'T00:00:00.000Z');
+    const targetDate = new Date(date + "T00:00:00.000Z");
 
-    // Find all students that match the criteria
+    // Step 1: Find matching students
     const studentQuery = {};
-    
-    if (specialization && specialization.trim() !== '') {
+    if (specialization && specialization.trim() !== "") {
       studentQuery.specializations = { $in: [specialization] };
     }
-    
-    if (section && section.trim() !== '') {
+    if (section && section.trim() !== "") {
       studentQuery.section = section;
     }
 
-    const students = await Student.find(studentQuery).session(session);
-    
+    const students = await Student.find(studentQuery, { _id: 1 }).lean();
     if (students.length === 0) {
-      return res.status(404).json({ message: 'No students found matching the criteria' });
+      return res.status(404).json({ message: "No students found matching the criteria" });
     }
 
-    let processedStudents = 0;
-    let updatedSummaries = 0;
-    let mergeStats = {
-      studentsWithRecords: 0,
-      totalRecordsRemoved: 0,
-      presentRecordsKept: 0,
-      absentRecordsKept: 0
-    };
+    const studentIds = students.map(s => s._id);
 
-    for (const student of students) {
-      const studentId = student._id;
-
-      // Find attendance record for this student and subject
-      const attendanceRecord = await Attendance.findOne({
-        studentId,
-        subjectCode
-      }).session(session);
-
-      if (!attendanceRecord) {
-        console.log(`No attendance record found for student ${studentId}`);
-        continue;
-      }
-
-      // Find all records for the target date
-      const dateRecords = attendanceRecord.records.filter(record => 
-        record.date.toDateString() === targetDate.toDateString()
-      );
-
-      if (dateRecords.length === 0) {
-        console.log(`No attendance records found for student ${studentId} on date ${date}`);
-        continue;
-      }
-
-      if (dateRecords.length <= finalCount) {
-        console.log(`Student ${studentId} already has ${dateRecords.length} records (≤ ${finalCount}), no merge needed`);
-        continue;
-      }
-
-      mergeStats.studentsWithRecords++;
-      
-      // Separate present and absent records
-      const presentRecords = dateRecords.filter(record => record.present === true);
-      const absentRecords = dateRecords.filter(record => record.present === false);
-
-      console.log(`Student ${studentId}: ${presentRecords.length} present, ${absentRecords.length} absent records`);
-
-      // Determine how many to keep of each type
-      let keepPresent = Math.min(presentRecords.length, finalCount);
-      let keepAbsent = Math.max(0, finalCount - keepPresent);
-
-      // If we have more absent records than we need, adjust
-      if (keepAbsent > absentRecords.length) {
-        keepAbsent = absentRecords.length;
-        keepPresent = finalCount - keepAbsent;
-      }
-
-      console.log(`Student ${studentId}: Keeping ${keepPresent} present, ${keepAbsent} absent records`);
-
-      // Create the final records array for this date
-      const finalRecords = [
-        ...presentRecords.slice(0, keepPresent),
-        ...absentRecords.slice(0, keepAbsent)
-      ];
-
-      mergeStats.presentRecordsKept += keepPresent;
-      mergeStats.absentRecordsKept += keepAbsent;
-      mergeStats.totalRecordsRemoved += (dateRecords.length - finalRecords.length);
-
-      // Remove all records for this date
-      attendanceRecord.records = attendanceRecord.records.filter(record => 
-        record.date.toDateString() !== targetDate.toDateString()
-      );
-
-      // Add back the final records
-      attendanceRecord.records.push(...finalRecords);
-
-      await attendanceRecord.save({ session });
-      processedStudents++;
-
-      // Update attendance summary
-      const summary = await AttendanceSummary.findOne({
-        studentId,
-        courseId,
-        semId,
+    // Step 2: Transaction
+    await session.withTransaction(async () => {
+      const attendances = await Attendance.find({
+        studentId: { $in: studentIds },
         subjectCode,
-        academicYear
+        "records.date": targetDate
       }).session(session);
 
-      if (summary) {
-        // Calculate the difference in classes and attendance
-        const originalTotalClasses = dateRecords.length;
-        const originalPresentClasses = presentRecords.length;
-        const newTotalClasses = finalRecords.length;
-        const newPresentClasses = finalRecords.filter(r => r.present).length;
+      if (attendances.length === 0) {
+        throw new Error("No attendance records found for given date");
+      }
 
-        // Update summary
-        summary.totalClasses -= (originalTotalClasses - newTotalClasses);
-        summary.attendedClasses -= (originalPresentClasses - newPresentClasses);
+      const attendanceOps = [];
+      const summaryOps = [];
 
-        // Ensure non-negative values
-        summary.totalClasses = Math.max(0, summary.totalClasses);
-        summary.attendedClasses = Math.max(0, summary.attendedClasses);
+      let processedStudents = 0;
+      let updatedSummaries = 0;
+      let mergeStats = {
+        studentsWithRecords: 0,
+        totalRecordsRemoved: 0,
+        presentRecordsKept: 0,
+        absentRecordsKept: 0
+      };
 
-        // Recalculate percentage
-        if (summary.totalClasses === 0) {
-          summary.attendancePercentage = 0;
-        } else {
-          summary.attendancePercentage = parseFloat(
-            ((summary.attendedClasses / summary.totalClasses) * 100).toFixed(2)
-          );
+      for (const att of attendances) {
+        const studentId = att.studentId;
+
+        const dateRecords = att.records.filter(
+          r => r.date.toDateString() === targetDate.toDateString()
+        );
+        if (dateRecords.length === 0) continue;
+
+        if (dateRecords.length <= finalCount) continue;
+
+        mergeStats.studentsWithRecords++;
+
+        const presentRecords = dateRecords.filter(r => r.present);
+        const absentRecords = dateRecords.filter(r => !r.present);
+
+        // --- ✅ maximize present records ---
+        let keepPresent = Math.min(presentRecords.length, finalCount);
+        let keepAbsent = finalCount - keepPresent;
+
+        if (keepAbsent > absentRecords.length) {
+          keepAbsent = absentRecords.length;
+          keepPresent = finalCount - keepAbsent;
         }
 
-        summary.lastUpdated = new Date();
-        await summary.save({ session });
-        updatedSummaries++;
+        const finalRecords = [
+          ...presentRecords.slice(0, keepPresent),
+          ...absentRecords.slice(0, keepAbsent)
+        ];
 
-        console.log(`Updated summary for student ${studentId}: ${summary.attendedClasses}/${summary.totalClasses} (${summary.attendancePercentage}%)`);
+        mergeStats.presentRecordsKept += keepPresent;
+        mergeStats.absentRecordsKept += keepAbsent;
+        mergeStats.totalRecordsRemoved += dateRecords.length - finalRecords.length;
+
+        // Replace old records for this date with finalRecords
+        const newRecords = att.records.filter(
+          r => r.date.toDateString() !== targetDate.toDateString()
+        );
+        newRecords.push(...finalRecords);
+
+        attendanceOps.push({
+          updateOne: {
+            filter: { _id: att._id },
+            update: { $set: { records: newRecords } }
+          }
+        });
+        processedStudents++;
+
+        // --- update summary ---
+        const summary = await AttendanceSummary.findOne({
+          studentId,
+          courseId,
+          semId,
+          subjectCode,
+          academicYear
+        }).session(session);
+
+        if (summary) {
+          const originalTotal = dateRecords.length;
+          const originalPresent = presentRecords.length;
+          const newTotal = finalRecords.length;
+          const newPresent = finalRecords.filter(r => r.present).length;
+
+          summary.totalClasses -= (originalTotal - newTotal);
+          summary.attendedClasses -= (originalPresent - newPresent);
+
+          summary.totalClasses = Math.max(0, summary.totalClasses);
+          summary.attendedClasses = Math.max(0, summary.attendedClasses);
+
+          summary.attendancePercentage =
+            summary.totalClasses === 0
+              ? 0
+              : parseFloat(((summary.attendedClasses / summary.totalClasses) * 100).toFixed(2));
+
+          summary.lastUpdated = new Date();
+
+          summaryOps.push({
+            updateOne: {
+              filter: { _id: summary._id },
+              update: {
+                $set: {
+                  totalClasses: summary.totalClasses,
+                  attendedClasses: summary.attendedClasses,
+                  attendancePercentage: summary.attendancePercentage,
+                  lastUpdated: summary.lastUpdated
+                }
+              }
+            }
+          });
+
+          updatedSummaries++;
+        }
       }
-    }
 
-    await session.commitTransaction();
-    session.endSession();
+      if (attendanceOps.length > 0) {
+        await Attendance.bulkWrite(attendanceOps, { session });
+      }
+      if (summaryOps.length > 0) {
+        await AttendanceSummary.bulkWrite(summaryOps, { session });
+      }
 
-    return res.status(200).json({ 
-      message: 'Attendance merged successfully',
-      processedStudents: processedStudents,
-      updatedSummaries: updatedSummaries,
-      mergeStatistics: mergeStats
-    });
+      res.status(200).json({
+        message: "Attendance merged successfully",
+        processedStudents,
+        updatedSummaries,
+        mergeStatistics: mergeStats
+      });
+    }, { maxCommitTimeMS: 120000 });
 
   } catch (error) {
-    await session.abortTransaction();
+    console.error("Error merging attendance:", error);
+    return res.status(500).json({ message: error.message });
+  } finally {
     session.endSession();
-    console.error('Error merging attendance:', error);
-    return res.status(500).json({ message: 'Server error' });
   }
 };
