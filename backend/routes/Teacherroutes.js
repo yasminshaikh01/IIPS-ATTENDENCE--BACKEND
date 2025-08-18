@@ -36,7 +36,7 @@ router.post("/upload-courses",verifyToken,uploadCoursesFromCSV);
 router.post("/upload-subjects",verifyToken,uploadSubjectsFromCSV);
 router.post("/upload-teachers",verifyToken,uploadTeachersFromCSV);
 router.post("/delete",verifyToken,deleteAttendance);
-router.post("/getAttendanceByCourseAndSemesterExcel", verifyToken, getAttendanceByCourseAndSemesterExcel);
+router.post("/getAttendanceByCourseAndSemesterExcel", getAttendanceByCourseAndSemesterExcel);
 router.post("/mergeAttendance", verifyToken, mergeAttendance)
 
 //summary

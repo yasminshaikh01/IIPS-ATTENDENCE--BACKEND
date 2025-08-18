@@ -396,6 +396,7 @@ exports.getAttendanceByCourseAndSemesterExcel = async (req, res) => {
       startDate,
       endDate,
       debarPercentage,
+      subjectCode, // <-- NEW
     } = req.body;
 
     // Build student query
@@ -419,17 +420,28 @@ exports.getAttendanceByCourseAndSemesterExcel = async (req, res) => {
     const courseDoc = await Course.findOne({ Course_Id: course });
     const courseName = courseDoc ? courseDoc.Course_Name : "Unknown Course";
 
-    // Get all subjects for this course/sem
+    // Get subjects (single subject if subjectCode is provided)
     const subjectQuery = {
       Course_ID: course,
       Sem_Id: semester,
     };
 
     if (specialization?.trim()) {
-      subjectQuery.Specialization = specialization; // field name as per your schema
+      subjectQuery.Specialization = specialization;
+    }
+
+    if (subjectCode?.trim()) {
+      subjectQuery.Sub_Code = subjectCode.trim();
     }
 
     const subjects = await Subject.find(subjectQuery);
+
+    if (!subjects.length) {
+      return res.status(404).json({
+        message: "No subjects found",
+        filters: { course, semester, subjectCode },
+      });
+    }
 
     const fromDate = startDate ? new Date(startDate) : null;
     const toDate = endDate ? new Date(endDate) : null;
@@ -442,6 +454,9 @@ exports.getAttendanceByCourseAndSemesterExcel = async (req, res) => {
     let titleParts = [`Report for ${courseName}`, `_Sem ${semester}`];
     if (section?.trim()) titleParts.push(`_Section ${section}`);
     if (specialization?.trim()) titleParts.push(`_${specialization}`);
+    if (subjectCode?.trim() && subjects.length === 1) {
+      titleParts.push(`_${subjects[0].Sub_Name} (${subjects[0].Sub_Code})`);
+    }
     if (startDate && endDate) {
       const sd = new Date(startDate).toLocaleDateString("en-GB");
       const ed = new Date(endDate).toLocaleDateString("en-GB");
@@ -569,10 +584,13 @@ exports.getAttendanceByCourseAndSemesterExcel = async (req, res) => {
       col.width = maxLength + 2;
     });
 
+    // ==== FILENAME ====
     let filenameParts = [`attendance_${course}_${semester}`];
-
     if (section?.trim()) filenameParts.push(`section-${section}`);
     if (specialization?.trim()) filenameParts.push(`spec-${specialization}`);
+    if (subjectCode?.trim() && subjects.length === 1) {
+      filenameParts.push(`subject-${subjects[0].Sub_Code}`);
+    }
     if (startDate && endDate) {
       const sd = new Date(startDate)
         .toLocaleDateString("en-GB")
@@ -583,10 +601,11 @@ exports.getAttendanceByCourseAndSemesterExcel = async (req, res) => {
       filenameParts.push(`between-${sd}_and-${ed}`);
     }
 
-    // Final filename
     const filename = `${filenameParts.join("_")}_${new Date()
       .toISOString()
       .slice(0, 10)}.xlsx`;
+
+    // ==== SEND RESPONSE ====
     res.setHeader(
       "Content-Type",
       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
