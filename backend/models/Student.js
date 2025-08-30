@@ -16,6 +16,8 @@ const studentSchema = new mongoose.Schema({
     type: String,
     required: true
   },
+   photo: { type: String, default: "http://res.cloudinary.com/duxvbwdf3/image/upload/v1731004725/question/xnykk7ixq6bk2qdrppty.png" },
+    
   courseId: {
     type: String,
     required: true
