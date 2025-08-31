@@ -1,6 +1,7 @@
 const express = require("express");
 const mongoose = require("mongoose");
 const session = require("express-session");
+const StudentRoutes = require("./routes/StudentRoutes");
 const TeacherRoutes = require("./routes/Teacherroutes");
 const AttendanceRoutes = require("./routes/Attendanceroutes");
 const cors = require("cors"); // Add this line
