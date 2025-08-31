@@ -44,7 +44,7 @@ app.use(
 
 app.use("/teacher", TeacherRoutes);
 app.use("/attendance",AttendanceRoutes );
-app.use("/students", StudentRoutes);
+app.use("/student", StudentRoutes);
 //cleaning session
 //setInterval(removeExpiredSessions, 30 * 60 * 1000); // every 30 min
 

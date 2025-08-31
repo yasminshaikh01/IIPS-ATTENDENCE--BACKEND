@@ -4,11 +4,11 @@ const router = express.Router();
 
 
 // CRUD
-router.post("/", createStudent);
+router.post("/create", createStudent);
 router.get("/", getStudents);
 router.get("/:id", getStudentById);
-router.put("/:id", updateStudent);
-router.delete("/:id", deleteStudent);
+router.put("/update/:id", updateStudent);
+router.delete("/delete/:id", deleteStudent);
 
 
 

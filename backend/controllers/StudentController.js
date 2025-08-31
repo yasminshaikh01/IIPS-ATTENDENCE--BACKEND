@@ -1,4 +1,5 @@
 const Student = require("../models/Student"); // adjust path
+const Course = require('../models/Course');
 const mongoose = require("mongoose");
 
 // Roll number pattern validation function
@@ -13,40 +14,114 @@ const isValidRollNumber = (rollNumber) => {
   return pattern.test(cleanedRollNumber);
 };
 
+// Helper function to convert empty strings to null
+const convertEmptyToNull = (value) => {
+  if (value === "" || value === undefined) return null;
+  return value;
+};
+
+// Helper function to process student data
+const processStudentData = (data) => {
+  const processed = {};
+  
+  // Required fields
+  if (data.rollNumber !== undefined) {
+    processed.rollNumber = data.rollNumber ? data.rollNumber.toUpperCase() : null;
+  }
+  if (data.fullName !== undefined) {
+    processed.fullName = convertEmptyToNull(data.fullName);
+  }
+  if (data.courseId !== undefined) {
+    processed.courseId = convertEmptyToNull(data.courseId);
+  }
+  if (data.semId !== undefined) {
+    processed.semId = data.semId || null;
+  }
+  
+  // Optional fields
+  if (data.email !== undefined) {
+    processed.email = convertEmptyToNull(data.email);
+  }
+  if (data.phoneNumber !== undefined) {
+    processed.phoneNumber = convertEmptyToNull(data.phoneNumber);
+  }
+  if (data.section !== undefined) {
+    processed.section = convertEmptyToNull(data.section);
+  }
+  if (data.specializations !== undefined) {
+    // Handle specializations array - remove empty strings
+    if (Array.isArray(data.specializations)) {
+      const filtered = data.specializations.filter(spec => spec !== "" && spec !== null && spec !== undefined);
+      processed.specializations = filtered.length > 0 ? filtered : null;
+    } else if (data.specializations === "") {
+      processed.specializations = null;
+    } else {
+      processed.specializations = data.specializations;
+    }
+  }
+  
+  return processed;
+};
+
 // ---------------- CREATE ----------------
 exports.createStudent = async (req, res) => {
   try {
-    const { rollNumber, fullName, courseId, semId, email, phoneNumber, section, specializations } = req.body;
+    const { rollNumber, fullName, courseName, semId, email, phoneNumber, section, specializations } = req.body;
 
-    if (!isValidRollNumber(rollNumber)) {
+    // Validate required fields
+    if (!rollNumber || !fullName || !courseName || !semId) {
+      return res.status(400).json({
+        message: "Roll number, full name, course name, and semester ID are required",
+      });
+    }
+
+    if (!isValidRollNumber(rollNumber?.trim())) {
       return res.status(400).json({
         message: "Invalid roll number format. Use XX-2KYY-NNN (e.g., IT-2K21-36)",
       });
     }
 
-    const existing = await Student.findOne({ rollNumber: rollNumber.toUpperCase() });
+    // ✅ Find course ID using course name
+    const course = await Course.findOne({ Course_Name: courseName }, { Course_Id: 1 }).lean();
+    if (!course) {
+      return res.status(404).json({ message: "Course not found" });
+    }
+
+    const existing = await Student.findOne({ rollNumber: rollNumber.toUpperCase().trim() });
     if (existing) {
       return res.status(400).json({ message: "Student with this roll number already exists" });
     }
 
-    const student = new Student({
-      rollNumber: rollNumber.toUpperCase(),
+    // Process the data to handle empty strings
+    const studentData = processStudentData({
+      rollNumber,
       fullName,
-      courseId,
+      courseId: course.Course_Id,   // ✅ resolved from courseName
       semId,
       email,
       phoneNumber,
       section,
-      specializations
+      specializations: specializations?.length ? specializations : null // store null if []
     });
 
+    const student = new Student(studentData);
     const saved = await student.save();
     res.status(201).json(saved);
   } catch (err) {
     console.error("Create error:", err);
+    if (err.name === 'ValidationError') {
+      return res.status(400).json({ 
+        message: "Validation error", 
+        details: Object.keys(err.errors).map(key => ({
+          field: key,
+          message: err.errors[key].message
+        }))
+      });
+    }
     res.status(500).json({ message: "Failed to create student" });
   }
 };
+
 
 // ---------------- READ ----------------
 exports.getStudents = async (req, res) => {
@@ -58,8 +133,6 @@ exports.getStudents = async (req, res) => {
     res.status(500).json({ message: "Failed to fetch students" });
   }
 };
-
-
 
 exports.getStudentById = async (req, res) => {
   try {
@@ -83,9 +156,19 @@ exports.updateStudent = async (req, res) => {
       });
     }
 
+    // Process the update data to handle empty strings
+    const updateData = processStudentData(req.body);
+
+    // Remove undefined values to avoid overwriting existing data
+    Object.keys(updateData).forEach(key => {
+      if (updateData[key] === undefined) {
+        delete updateData[key];
+      }
+    });
+
     const updated = await Student.findByIdAndUpdate(
       req.params.id,
-      { ...req.body, rollNumber: rollNumber ? rollNumber.toUpperCase() : undefined },
+      updateData,
       { new: true, runValidators: true }
     );
 
@@ -94,6 +177,15 @@ exports.updateStudent = async (req, res) => {
     res.status(200).json(updated);
   } catch (err) {
     console.error("Update error:", err);
+    if (err.name === 'ValidationError') {
+      return res.status(400).json({ 
+        message: "Validation error", 
+        details: Object.keys(err.errors).map(key => ({
+          field: key,
+          message: err.errors[key].message
+        }))
+      });
+    }
     res.status(500).json({ message: "Failed to update student" });
   }
 };

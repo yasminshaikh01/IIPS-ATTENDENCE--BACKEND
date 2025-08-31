@@ -459,3 +459,134 @@ exports.uploadTeachersFromCSV = [
       });
   },
 ];
+
+
+
+exports.uploadFacultySubjectsFromCSV = [
+  upload.single("file"),
+  async (req, res) => {
+    if (!req.file) {
+      return res.status(400).json({ message: "CSV file is required" });
+    }
+
+    const filePath = path.resolve(req.file.path);
+    const skippedTeachers = [];
+    const updatedTeachers = [];
+    let updated = 0;
+    let skipped = 0;
+
+    try {
+      const rows = [];
+
+      fs.createReadStream(filePath)
+        .pipe(csvParser())
+        .on("data", (row) => {
+          const normalize = (key) => key?.trim().toLowerCase();
+          const getField = (fieldName) => {
+            const key = Object.keys(row).find(
+              (k) => normalize(k) === normalize(fieldName)
+            );
+            return key ? row[key]?.trim() || null : null;
+          };
+
+          const faculty_id = getField("faculty_id");
+          const subCode = getField("Sub_Code");
+          const email = getField("email");
+
+          rows.push({ faculty_id, subCode, email });
+        })
+        .on("end", async () => {
+          for (const { faculty_id, subCode, email } of rows) {
+            if (!email) {
+              skipped++;
+              skippedTeachers.push({
+                faculty_id: faculty_id || "MISSING",
+                email: "MISSING",
+                reason: "No email provided",
+              });
+              continue;
+            }
+
+            const teacher = await Teacher.findOne({ email });
+            if (!teacher) {
+              skipped++;
+              skippedTeachers.push({
+                faculty_id: faculty_id || "MISSING",
+                email,
+                reason: "Teacher not found in DB",
+              });
+              continue;
+            }
+
+            if (subCode) {
+              const subCodes = subCode.split(",").map((c) => c.trim());
+
+              // update faculty_id if not already set
+              if (faculty_id && !teacher.faculty_id) {
+                teacher.faculty_id = faculty_id;
+              }
+
+              for (const code of subCodes) {
+                 if (code.toLowerCase() === "all") {
+    const exists = teacher.subjectAccess.some((s) => s.subjectCode === "all");
+    if (!exists) {
+      teacher.subjectAccess.push({ subjectCode: "all" });
+    }
+    continue; // skip validation for "all"
+  }
+                // ✅ check if subject exists
+                const subjectExists = await Subject.findOne({ Sub_Code: code });
+                if (!subjectExists) {
+                  skipped++;
+                  skippedTeachers.push({
+                    faculty_id: faculty_id || teacher.faculty_id || "MISSING",
+                    email,
+                    reason: `Subject not found with code ${code}`,
+                  });
+                  continue;
+                }
+
+                // push unique subject codes
+                const exists = teacher.subjectAccess.some(
+                  (s) => s.subjectCode === code
+                );
+                if (!exists) {
+                  teacher.subjectAccess.push({ subjectCode: code });
+                }
+              }
+
+              await teacher.save();
+              updated++;
+              updatedTeachers.push(email);
+            } else {
+              skipped++;
+              skippedTeachers.push({
+                faculty_id: faculty_id || "MISSING",
+                email,
+                reason: "No subject code provided",
+              });
+            }
+          }
+
+          fs.unlinkSync(filePath);
+
+          res.status(200).json({
+            message: `CSV processed: ${updated} updated, ${skipped} skipped`,
+            updated,
+            skipped,
+            total: rows.length,
+            updatedTeachers,
+            skippedTeachers,
+          });
+        })
+        .on("error", (err) => {
+          console.error("CSV Parse Error:", err);
+          res.status(500).json({ message: "Failed to parse CSV file" });
+        });
+    } catch (err) {
+      console.error("Upload Error:", err);
+      res.status(500).json({ message: "Failed to process CSV file" });
+    }
+  },
+];
+
