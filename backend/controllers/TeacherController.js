@@ -1,5 +1,6 @@
 const Teacher = require("../models/Teacher");
 const UnverifiedTeacher = require("../models/UnverifiedTeacher");
+const Subject = require('../models/Subject');
 const {
   sendOtpToEmail,
   sendResetLinkToEmail,
@@ -312,6 +313,168 @@ const updateTeacherDetailsById = async (req, res) => {
   }
 };
 
+// ================================
+// 📌 Create Teacher (Admin Only)
+// ================================
+const createTeacher = async (req, res) => {
+  try {
+    const { name, email, password, mobileNumber, faculty_id, subjectAccess } = req.body;
+
+    // ✅ Check if teacher with email or faculty_id already exists
+    const existingTeacher = await Teacher.findOne({
+      $or: [{ email }, { faculty_id }]
+    });
+
+    if (existingTeacher) {
+      return res.status(409).json({   // 409 Conflict (resource already exists)
+        success: false,
+        message: existingTeacher.email === email 
+          ? "A teacher with this email already exists"
+          : "A teacher with this faculty ID already exists",
+        teacher: {
+          id: existingTeacher._id,
+          name: existingTeacher.name,
+          email: existingTeacher.email,
+          faculty_id: existingTeacher.faculty_id,
+        }
+      });
+    }
+
+    // ✅ Hash password
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // ✅ Convert subjectAccess array of strings -> array of objects
+    const formattedSubjects = subjectAccess.map(code => ({ subjectCode: code }));
+
+    const teacher = new Teacher({
+      name,
+      email,
+      password: hashedPassword,
+      mobileNumber,
+      faculty_id,
+      subjectAccess: formattedSubjects,
+    });
+
+    await teacher.save();
+
+    res.status(201).json({
+      success: true,
+      message: "Teacher created successfully",
+      teacher: {
+        id: teacher._id,
+        name: teacher.name,
+        email: teacher.email,
+        faculty_id: teacher.faculty_id,
+        subjectAccess: teacher.subjectAccess,
+      }
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Error creating teacher",
+      error: error.message,
+    });
+  }
+};
+
+// ================================
+// 📌 Get All Teachers
+// ================================
+const getAllTeachers = async (req, res) => {
+  try {
+    const teachers = await Teacher.find().select("-password");
+    res.status(200).json({ success: true, teachers });
+  } catch (error) {
+    res.status(500).json({ success: false, message: "Error fetching teachers", error: error.message });
+  }
+};
+
+// ================================
+// 📌 Get Teacher by ID
+// ================================
+const getTeacherById = async (req, res) => {
+  try {
+    const teacher = await Teacher.findById(req.params.id).select("-password");
+    if (!teacher) return res.status(404).json({ success: false, message: "Teacher not found" });
+
+    res.status(200).json({ success: true, teacher });
+  } catch (error) {
+    res.status(500).json({ success: false, message: "Error fetching teacher", error: error.message });
+  }
+};
+
+// ================================
+// 📌 Update Teacher (except password)
+// ================================
+const updateTeacher = async (req, res) => {
+  try {
+    const { name, email, mobileNumber, faculty_id, subjectAccess } = req.body;
+
+    const teacher = await Teacher.findByIdAndUpdate(
+      req.params.id,
+      { name, email, mobileNumber, faculty_id, subjectAccess },
+      { new: true }
+    ).select("-password");
+
+    if (!teacher) return res.status(404).json({ success: false, message: "Teacher not found" });
+
+    res.status(200).json({ success: true, message: "Teacher updated successfully", teacher });
+  } catch (error) {
+    res.status(400).json({ success: false, message: "Error updating teacher", error: error.message });
+  }
+};
+
+// ================================
+// 📌 Update Teacher Password (Admin)
+// ================================
+const updateTeacherPassword = async (req, res) => {
+  try {
+    const { password } = req.body;
+    if (!password) return res.status(400).json({ success: false, message: "Password is required" });
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    const teacher = await Teacher.findByIdAndUpdate(
+      req.params.id,
+      { password: hashedPassword },
+      { new: true }
+    );
+
+    if (!teacher) return res.status(404).json({ success: false, message: "Teacher not found" });
+
+    res.status(200).json({ success: true, message: "Password updated successfully" });
+  } catch (error) {
+    res.status(400).json({ success: false, message: "Error updating password", error: error.message });
+  }
+};
+
+// ================================
+// 📌 Delete Teacher
+// ================================
+const deleteTeacher = async (req, res) => {
+  try {
+    const teacher = await Teacher.findByIdAndDelete(req.params.id);
+    if (!teacher) return res.status(404).json({ success: false, message: "Teacher not found" });
+
+    res.status(200).json({ success: true, message: "Teacher deleted successfully" });
+  } catch (error) {
+    res.status(500).json({ success: false, message: "Error deleting teacher", error: error.message });
+  }
+};
+
+const getAllSubjects = async (req, res) => {
+  try {
+    const subjects = await Subject.find({}, { Sub_Code: 1, _id: 0 }); // only Sub_Code
+    const codes = subjects.map(sub => sub.Sub_Code); // extract array of codes
+    res.status(200).json(codes);
+  } catch (err) {
+    console.error('Error fetching subject codes:', err);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
+
+
 module.exports = {
   login,
   // verifyOtp,
@@ -322,4 +485,11 @@ module.exports = {
   resetPassword,
   updateTeacherDetailsById,
   getTeacherDetailsById,
+  getAllTeachers,
+  createTeacher,
+  getTeacherById,
+  updateTeacher,
+  updateTeacherPassword,
+  deleteTeacher,
+  getAllSubjects
 };

@@ -10,6 +10,13 @@ const {
 
   getTeacherDetailsById,
   updateTeacherDetailsById,
+  getAllTeachers,
+  getTeacherById,
+  updateTeacher,
+  updateTeacherPassword,
+  deleteTeacher,
+  createTeacher,
+  getAllSubjects,
 
 
   
@@ -37,8 +44,18 @@ router.post("/upload-subjects",verifyToken,uploadSubjectsFromCSV);
 router.post("/upload-teachers",verifyToken,uploadTeachersFromCSV);
 router.post("/delete",verifyToken,deleteAttendance);
 router.post("/getAttendanceByCourseAndSemesterExcel",verifyToken, getAttendanceByCourseAndSemesterExcel);
-router.post("/mergeAttendance", verifyToken, mergeAttendance)
-router.post("/uploadFacultySubjectsFromCSV", verifyToken, uploadFacultySubjectsFromCSV)
+router.post("/mergeAttendance", verifyToken, mergeAttendance);
+router.post("/uploadFacultySubjectsFromCSV", verifyToken, uploadFacultySubjectsFromCSV);
+
+//crud
+router.get("/getallsubjects",verifyToken, getAllSubjects);
+router.post("/create",verifyToken,createTeacher);
+router.get("/getall",verifyToken, getAllTeachers);
+router.get("/:id",verifyToken, getTeacherById);
+router.put("/:id",verifyToken, updateTeacher);
+router.put("/:id/password",verifyToken, updateTeacherPassword);
+router.delete("/:id",verifyToken, deleteTeacher);
+
 
 //summary
 router.get('/getMissingSubjectSummary',verifyToken, getAllUnmarkedAttendanceReport);
