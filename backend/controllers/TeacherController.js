@@ -410,17 +410,32 @@ const updateTeacher = async (req, res) => {
   try {
     const { name, email, mobileNumber, faculty_id, subjectAccess } = req.body;
 
+    // ✅ Convert ["all","IC-101"] → [{ subjectCode: "all" }, { subjectCode: "IC-101" }]
+    const formattedSubjectAccess = Array.isArray(subjectAccess)
+      ? subjectAccess.map(sub => ({ subjectCode: sub }))
+      : [];
+
     const teacher = await Teacher.findByIdAndUpdate(
       req.params.id,
-      { name, email, mobileNumber, faculty_id, subjectAccess },
+      { name, email, mobileNumber, faculty_id, subjectAccess: formattedSubjectAccess },
       { new: true }
     ).select("-password");
 
-    if (!teacher) return res.status(404).json({ success: false, message: "Teacher not found" });
+    if (!teacher) {
+      return res.status(404).json({ success: false, message: "Teacher not found" });
+    }
 
-    res.status(200).json({ success: true, message: "Teacher updated successfully", teacher });
+    res.status(200).json({
+      success: true,
+      message: "Teacher updated successfully",
+      teacher
+    });
   } catch (error) {
-    res.status(400).json({ success: false, message: "Error updating teacher", error: error.message });
+    res.status(400).json({
+      success: false,
+      message: "Error updating teacher",
+      error: error.message
+    });
   }
 };
 
