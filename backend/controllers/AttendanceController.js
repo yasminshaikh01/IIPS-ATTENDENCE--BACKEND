@@ -831,3 +831,85 @@ exports.mergeAttendance = async (req, res) => {
     session.endSession();
   }
 };
+
+//for proxy and updating attendance of single student
+exports.markSingleAttendance = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const { rollNumber, subjectCode, date, present } = req.body;
+
+    if (!rollNumber || !subjectCode || !date || typeof present !== "boolean") {
+      return res.status(400).json({ message: "All fields are required" });
+    }
+
+    // 1️⃣ Find student by roll number
+    const student = await Student.findOne({ rollNumber }).session(session);
+    if (!student) {
+      return res.status(404).json({ message: "Student not found" });
+    }
+
+    const studentId = student._id;
+
+    // 2️⃣ Upsert Attendance record
+    const existing = await Attendance.findOne({
+      studentId,
+      subjectCode,
+      "records.date": new Date(date),
+    }).session(session);
+
+    if (existing) {
+      // Update existing record for that date
+      await Attendance.updateOne(
+        { studentId, subjectCode, "records.date": new Date(date) },
+        { $set: { "records.$.present": present } },
+        { session }
+      );
+    } else {
+      // Insert new record for that date
+      await Attendance.updateOne(
+        { studentId, subjectCode },
+        {
+          $setOnInsert: { studentId, subjectCode },
+          $push: { records: { date: new Date(date), present } },
+        },
+        { upsert: true, session }
+      );
+    }
+
+    // 3️⃣ Update AttendanceSummary (only attendedClasses, not totalClasses)
+    await AttendanceSummary.updateOne(
+      {
+        studentId,
+        subjectCode,
+        semId: student.semId,
+        courseId: student.courseId,
+        academicYear: student.academicYear,
+      },
+      {
+        $inc: { attendedClasses: present ? 1 : 0 }, // ⬅️ only attendedClasses
+        $setOnInsert: {
+          studentId,
+          subjectCode,
+          semId: student.semId,
+          courseId: student.courseId,
+          academicYear: student.academicYear,
+          totalClasses: 0, // stays unchanged
+        },
+        $set: { lastUpdated: new Date() },
+      },
+      { upsert: true, session }
+    );
+
+    await session.commitTransaction();
+    session.endSession();
+
+    return res.status(200).json({ message: "Attendance marked successfully" });
+  } catch (error) {
+    await session.abortTransaction();
+    session.endSession();
+    console.error("Error marking attendance:", error);
+    return res.status(500).json({ message: "Server error" });
+  }
+};
