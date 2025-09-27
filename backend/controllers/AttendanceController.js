@@ -8,10 +8,48 @@ const Subject = require('../models/Subject');
 const bcrypt = require("bcryptjs");
 const emailService = require('../config/nodemailer');
 
+
+
+exports.getSpecializations = async (req, res) => {
+  const { course, semester } = req.body;
+
+  if (!course || !semester) {
+    return res.status(400).json({ message: 'Course and semester are required' });
+  }
+
+  try {
+    // Find course by Course_Name to get Course_Id
+    const courseDoc = await Course.findOne({ Course_Name: course });
+    if (!courseDoc) {
+      return res.status(404).json({ message: 'Course not found' });
+    }
+
+    // Get distinct specializations for the course and semester
+    const specializations = await Subject.distinct('Specialization', {
+      Course_ID: courseDoc.Course_Id,
+      Sem_Id: semester,
+      Specialization: { $exists: true, $ne: null, $ne: '' }
+    });
+
+    // Filter out any empty or null values and sort
+    const validSpecializations = specializations
+      .filter(spec => spec && spec.trim() !== '')
+      .sort();
+
+    res.status(200).json({
+      hasSpecializations: validSpecializations.length > 0,
+      specializations: validSpecializations
+    });
+  } catch (err) {
+    console.error('Error fetching specializations:', err);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
 // Get all subjects for a course and semester
 exports.getSubjects = async (req, res) => {
-  const { course, semester, specialization } = req.body;
-
+  const { course, semester, specialization, section } = req.body;
+ 
   if (!course || !semester) {
     return res.status(400).json({ message: 'Course and semester are required' });
   }
@@ -34,11 +72,128 @@ exports.getSubjects = async (req, res) => {
       query.Specialization = specialization;
     }
 
+    // Add section if provided
+    if (section) {
+      query.Section = section;
+    }
+
     const subjects = await Subject.find(query);
     res.status(200).json(subjects);
   } catch (err) {
     console.error('Error fetching subjects:', err);
     res.status(500).json({ message: 'Internal server error' });
+  }
+};
+// Get all courses
+exports.getCourses = async (req, res) => {
+  try {
+    const courses = await Course.find().select('Course_Id Course_Name No_of_Sem');
+    
+    if (!courses || courses.length === 0) {
+      return res.status(404).json({ message: 'No courses found' });
+    }
+
+    // Transform the data to match the frontend expectations
+    const courseConfig = {};
+    courses.forEach(course => {
+      // Use Course_Name directly as both key and display name
+      courseConfig[course.Course_Name] = {
+        courseId: course.Course_Id,
+        years: Math.ceil(course.No_of_Sem / 2), // Convert semesters to years
+        displayName: course.Course_Name, // Use Course_Name as display name
+        totalSemesters: course.No_of_Sem
+      };
+    });
+
+    res.status(200).json({
+      success: true,
+      data: courseConfig
+    });
+
+  } catch (err) {
+    console.error('Error fetching courses:', err);
+    res.status(500).json({ 
+      success: false,
+      message: 'Internal server error',
+      error: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
+  }
+};
+
+// Get a specific course by Course_Id or Course_Name
+exports.getCourseById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Try to find by Course_Id first, then by Course_Name
+    let course = await Course.findOne({ Course_Id: id });
+    if (!course) {
+      course = await Course.findOne({ Course_Name: id });
+    }
+
+    if (!course) {
+      return res.status(404).json({ 
+        success: false,
+        message: 'Course not found' 
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: {
+        courseId: course.Course_Id,
+        courseName: course.Course_Name,
+        totalSemesters: course.No_of_Sem,
+        years: Math.ceil(course.No_of_Sem / 2)
+      }
+    });
+
+  } catch (err) {
+    console.error('Error fetching course:', err);
+    res.status(500).json({ 
+      success: false,
+      message: 'Internal server error',
+      error: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
+  }
+};
+
+// Get available semesters for a course
+exports.getCourseSemesters = async (req, res) => {
+  try {
+    const { courseId } = req.params;
+    
+    const course = await Course.findOne({ Course_Id: courseId });
+    if (!course) {
+      return res.status(404).json({ 
+        success: false,
+        message: 'Course not found' 
+      });
+    }
+
+    // Generate available semesters array
+    const availableSemesters = [];
+    for (let i = 1; i <= Math.min(course.No_of_Sem, 10); i++) {
+      availableSemesters.push(i);
+    }
+
+    res.status(200).json({
+      success: true,
+      data: {
+        courseId: course.Course_Id,
+        courseName: course.Course_Name,
+        totalSemesters: course.No_of_Sem,
+        availableSemesters
+      }
+    });
+
+  } catch (err) {
+    console.error('Error fetching course semesters:', err);
+    res.status(500).json({ 
+      success: false,
+      message: 'Internal server error',
+      error: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
   }
 };
 

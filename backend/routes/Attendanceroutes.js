@@ -1,5 +1,5 @@
 const express = require("express");
-const { getStudentsByCourseAndSemester, submitAttendance, getAttendanceByCourseAndSubject, getStudentById, getStudentAttendanceDetail, sendLowAttendanceNotifications, getSubjects, markSingleAttendance } = require("../controllers/AttendanceController");
+const { getStudentsByCourseAndSemester, submitAttendance, getAttendanceByCourseAndSubject, getStudentById, getStudentAttendanceDetail, sendLowAttendanceNotifications, getSubjects, markSingleAttendance, getCourses, getCourseById, getCourseSemesters, getSpecializations } = require("../controllers/AttendanceController");
 const verifyToken = require("../middleware/verifyToken");
 
 const router = express.Router();
@@ -13,5 +13,9 @@ router.post("/getAttendanceByCourseAndSubject",getAttendanceByCourseAndSubject);
 router.post('/getsubjects', getSubjects);
 router.post('/sendLowAttendanceNotifications', sendLowAttendanceNotifications);
 router.post('/markSingleAttendance', markSingleAttendance);
+router.get('/', getCourses);
+router.get('/:id', getCourseById);
+router.get('/:courseId/semesters', getCourseSemesters);
+router.post('/getspecializations',getSpecializations);
 
 module.exports = router;
