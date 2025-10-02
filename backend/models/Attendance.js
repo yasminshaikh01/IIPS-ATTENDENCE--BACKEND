@@ -1,4 +1,3 @@
-// Attendance.js
 const mongoose = require('mongoose');
 
 const attendanceSchema = new mongoose.Schema({
@@ -14,11 +13,13 @@ const attendanceSchema = new mongoose.Schema({
   records: [
     {
       date: { type: Date, required: true },
-      present: { type: Boolean, required: true }
+      present: { type: Boolean, required: true },
+      markedBy: { type: String, default: null } // now at record level
     }
   ]
 }, { timestamps: true });
 
-attendanceSchema.index({ studentId: 1, subjectCode: 1 }); // fast lookup
+// Composite index for fast lookups
+attendanceSchema.index({ studentId: 1, subjectCode: 1 });
 
 module.exports = mongoose.model('Attendance', attendanceSchema);

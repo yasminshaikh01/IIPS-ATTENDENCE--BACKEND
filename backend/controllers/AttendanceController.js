@@ -7,33 +7,91 @@ const Course = require('../models/Course');
 const Subject = require('../models/Subject');
 const bcrypt = require("bcryptjs");
 const emailService = require('../config/nodemailer');
+const Teacher = require("../models/Teacher");
 
 
+// ===================== Helper =====================
+async function getTeacherAccess(teacherId) {
+  if (!teacherId) return { all: true }; // unrestricted if no teacherId
 
+  const teacher = await Teacher.findById(teacherId).lean();
+  if (!teacher) return { all: true }; // fallback unrestricted
+
+  if (teacher.subjectAccess.some(s => s.subjectCode === "all")) {
+    return { all: true };
+  }
+
+  const allowedCodes = teacher.subjectAccess.map(s => s.subjectCode);
+
+  // Fetch Course_ID + Sem_Id + Specialization in one go
+  const subjects = await Subject.find(
+    { Sub_Code: { $in: allowedCodes } },
+    { Course_ID: 1, Sem_Id: 1, Sub_Code: 1, Specialization: 1 }
+  ).lean();
+
+  return {
+    all: false,
+    allowedCodes,
+    courseIds: [...new Set(subjects.map(s => s.Course_ID))],
+    semestersByCourse: subjects.reduce((acc, s) => {
+      if (!acc[s.Course_ID]) acc[s.Course_ID] = new Set();
+      acc[s.Course_ID].add(s.Sem_Id);
+      return acc;
+    }, {}),
+    specializationsByCourseSem: subjects.reduce((acc, s) => {
+      const key = `${s.Course_ID}-${s.Sem_Id}`;
+      if (!acc[key]) acc[key] = new Set();
+      if (s.Specialization) acc[key].add(s.Specialization);
+      return acc;
+    }, {}),
+  };
+}
+
+// ===================== Get Specializations =====================
 exports.getSpecializations = async (req, res) => {
-  const { course, semester } = req.body;
+  const { course, semester, teacherId } = req.body;
 
   if (!course || !semester) {
-    return res.status(400).json({ message: 'Course and semester are required' });
+    return res.status(400).json({ message: "Course and semester are required" });
   }
 
   try {
     // Find course by Course_Name to get Course_Id
     const courseDoc = await Course.findOne({ Course_Name: course });
     if (!courseDoc) {
-      return res.status(404).json({ message: 'Course not found' });
+      return res.status(404).json({ message: "Course not found" });
     }
 
-    // Get distinct specializations for the course and semester
-    const specializations = await Subject.distinct('Specialization', {
+    // Build query
+    const query = {
       Course_ID: courseDoc.Course_Id,
       Sem_Id: semester,
-      Specialization: { $exists: true, $ne: null, $ne: '' }
-    });
+      Specialization: { $exists: true }
+    };
 
-    // Filter out any empty or null values and sort
+    // Restrict by teacherId if provided
+    if (teacherId) {
+      const teacher = await Teacher.findById(teacherId).lean();
+      if (!teacher) {
+        return res.status(404).json({ message: "Teacher not found" });
+      }
+
+      // If not "all", restrict by subjectAccess
+      if (
+        teacher.subjectAccess.length &&
+        !(teacher.subjectAccess.length === 1 && teacher.subjectAccess[0].subjectCode === "all")
+      ) {
+        const subjectCodes = teacher.subjectAccess.map(s => s.subjectCode);
+        query.Sub_Code = { $in: subjectCodes };
+      }
+    }
+
+    // Get distinct specializations
+    const specializations = await Subject.distinct("Specialization", query);
+
+    // Filter out null, empty strings, or whitespace-only
     const validSpecializations = specializations
-      .filter(spec => spec && spec.trim() !== '')
+      .filter(spec => spec && String(spec).trim() !== "")
       .sort();
 
     res.status(200).json({
@@ -41,101 +99,105 @@ exports.getSpecializations = async (req, res) => {
       specializations: validSpecializations
     });
   } catch (err) {
-    console.error('Error fetching specializations:', err);
-    res.status(500).json({ message: 'Internal server error' });
+    console.error("Error fetching specializations:", err);
+    res.status(500).json({ message: "Internal server error" });
   }
 };
 
-// Get all subjects for a course and semester
+
+// ===================== Get Subjects =====================
 exports.getSubjects = async (req, res) => {
-  const { course, semester, specialization, section } = req.body;
- 
+  const { course, semester, specialization, section, teacherId } = req.body;
+
   if (!course || !semester) {
-    return res.status(400).json({ message: 'Course and semester are required' });
+    return res.status(400).json({ message: "Course and semester are required" });
   }
 
   try {
-    // Find course by Course_Name to get Course_Id
-    const courseDoc = await Course.findOne({ Course_Name: course });
-    if (!courseDoc) {
-      return res.status(404).json({ message: 'Course not found' });
-    }
+    const access = await getTeacherAccess(teacherId);
+    const courseDoc = await Course.findOne({ Course_Name: course }).lean();
+    if (!courseDoc) return res.status(404).json({ message: "Course not found" });
 
-    // Build the query
-    const query = {
-      Course_ID: courseDoc.Course_Id,
-      Sem_Id: semester
-    };
+    const query = { Course_ID: courseDoc.Course_Id, Sem_Id: semester };
+    if (specialization) query.Specialization = specialization;
+    if (section) query.Section = section;
+    if (!access.all) query.Sub_Code = { $in: access.allowedCodes };
 
-    // Add specialization if provided
-    if (specialization) {
-      query.Specialization = specialization;
-    }
-
-    // Add section if provided
-    if (section) {
-      query.Section = section;
-    }
-
-    const subjects = await Subject.find(query);
+    const subjects = await Subject.find(query).lean();
     res.status(200).json(subjects);
   } catch (err) {
-    console.error('Error fetching subjects:', err);
-    res.status(500).json({ message: 'Internal server error' });
+    console.error("Error fetching subjects:", err);
+    res.status(500).json({ message: "Internal server error" });
   }
 };
-// Get all courses
+
+// ===================== Get All Courses =====================
 exports.getCourses = async (req, res) => {
+  const { teacherId } = req.body;
+
   try {
-    const courses = await Course.find().select('Course_Id Course_Name No_of_Sem');
-    
-    if (!courses || courses.length === 0) {
-      return res.status(404).json({ message: 'No courses found' });
+    const access = await getTeacherAccess(teacherId);
+
+    let courses;
+    if (access.all) {
+      courses = await Course.find().select("Course_Id Course_Name No_of_Sem").lean();
+    } else {
+      courses = await Course.find({ Course_Id: { $in: access.courseIds } })
+        .select("Course_Id Course_Name No_of_Sem")
+        .lean();
     }
 
-    // Transform the data to match the frontend expectations
+    if (!courses || courses.length === 0) {
+      return res.status(404).json({ message: "No courses found" });
+    }
+
     const courseConfig = {};
     courses.forEach(course => {
-      // Use Course_Name directly as both key and display name
       courseConfig[course.Course_Name] = {
         courseId: course.Course_Id,
-        years: Math.ceil(course.No_of_Sem / 2), // Convert semesters to years
-        displayName: course.Course_Name, // Use Course_Name as display name
-        totalSemesters: course.No_of_Sem
+        years: Math.ceil(course.No_of_Sem / 2),
+        displayName: course.Course_Name,
+        totalSemesters: course.No_of_Sem,
       };
     });
 
     res.status(200).json({
       success: true,
-      data: courseConfig
+      data: courseConfig,
     });
-
   } catch (err) {
-    console.error('Error fetching courses:', err);
-    res.status(500).json({ 
+    console.error("Error fetching courses:", err);
+    res.status(500).json({
       success: false,
-      message: 'Internal server error',
-      error: process.env.NODE_ENV === 'development' ? err.message : undefined
+      message: "Internal server error",
     });
   }
 };
 
-// Get a specific course by Course_Id or Course_Name
+// ===================== Get Course by Id/Name =====================
 exports.getCourseById = async (req, res) => {
+  const { teacherId } = req.body;
   try {
     const { id } = req.params;
-    
-    // Try to find by Course_Id first, then by Course_Name
-    let course = await Course.findOne({ Course_Id: id });
+    const access = await getTeacherAccess(teacherId);
+
+    let course = await Course.findOne({ Course_Id: id }).lean();
+    if (!course) course = await Course.findOne({ Course_Name: id }).lean();
     if (!course) {
-      course = await Course.findOne({ Course_Name: id });
+      return res.status(404).json({ success: false, message: "Course not found" });
     }
 
-    if (!course) {
-      return res.status(404).json({ 
-        success: false,
-        message: 'Course not found' 
+    if (!access.all) {
+      const hasSubjects = await Subject.exists({
+        Sub_Code: { $in: access.allowedCodes },
+        Course_ID: course.Course_Id,
       });
+      if (!hasSubjects) {
+        return res.status(403).json({
+          success: false,
+          message: "Not authorized to access this course",
+        });
+      }
     }
 
     res.status(200).json({
@@ -144,37 +206,68 @@ exports.getCourseById = async (req, res) => {
         courseId: course.Course_Id,
         courseName: course.Course_Name,
         totalSemesters: course.No_of_Sem,
-        years: Math.ceil(course.No_of_Sem / 2)
-      }
+        years: Math.ceil(course.No_of_Sem / 2),
+      },
     });
-
   } catch (err) {
-    console.error('Error fetching course:', err);
-    res.status(500).json({ 
+    console.error("Error fetching course:", err);
+    res.status(500).json({
       success: false,
-      message: 'Internal server error',
-      error: process.env.NODE_ENV === 'development' ? err.message : undefined
+      message: "Internal server error",
     });
   }
 };
 
-// Get available semesters for a course
+// ===================== Get Semesters =====================
 exports.getCourseSemesters = async (req, res) => {
   try {
     const { courseId } = req.params;
-    
+    const { teacherId } = req.params; // optional teacher filter
+
     const course = await Course.findOne({ Course_Id: courseId });
     if (!course) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         success: false,
-        message: 'Course not found' 
+        message: "Course not found",
       });
     }
 
-    // Generate available semesters array
-    const availableSemesters = [];
-    for (let i = 1; i <= Math.min(course.No_of_Sem, 10); i++) {
-      availableSemesters.push(i);
+    let availableSemesters = [];
+
+    if (teacherId) {
+      // Fetch teacher
+      const teacher = await Teacher.findById(teacherId).lean();
+      if (!teacher) {
+        return res.status(404).json({ success: false, message: "Teacher not found" });
+      }
+
+      // If teacher has "all" access → return all semesters
+      if (
+        teacher.subjectAccess.length &&
+        teacher.subjectAccess.length === 1 &&
+        teacher.subjectAccess[0].subjectCode === "all"
+      ) {
+        for (let i = 1; i <= Math.min(course.No_of_Sem, 10); i++) {
+          availableSemesters.push(i);
+        }
+      } else {
+        // Restrict to semesters of teacher's subjects
+        const subjectCodes = teacher.subjectAccess.map(s => s.subjectCode);
+
+        // Find subjects teacher can teach in this course
+        const teacherSubjects = await Subject.find({
+          Course_ID: course.Course_Id,
+          Sub_Code: { $in: subjectCodes }
+        }).select("Sem_Id");
+
+        // Extract unique Semesters
+        availableSemesters = [...new Set(teacherSubjects.map(s => parseInt(s.Sem_Id)))];
+      }
+    } else {
+      // No teacher filter → return all semesters
+      for (let i = 1; i <= Math.min(course.No_of_Sem, 10); i++) {
+        availableSemesters.push(i);
+      }
     }
 
     res.status(200).json({
@@ -183,20 +276,18 @@ exports.getCourseSemesters = async (req, res) => {
         courseId: course.Course_Id,
         courseName: course.Course_Name,
         totalSemesters: course.No_of_Sem,
-        availableSemesters
-      }
+        availableSemesters: availableSemesters.sort((a, b) => a - b),
+      },
     });
-
   } catch (err) {
-    console.error('Error fetching course semesters:', err);
-    res.status(500).json({ 
+    console.error("Error fetching course semesters:", err);
+    res.status(500).json({
       success: false,
-      message: 'Internal server error',
-      error: process.env.NODE_ENV === 'development' ? err.message : undefined
+      message: "Internal server error",
+      error: process.env.NODE_ENV === "development" ? err.message : undefined,
     });
   }
 };
-
 // Get students by course and semester
 // Get students by course and semester (optimized)
 exports.getStudentsByCourseAndSemester = async (req, res) => {
@@ -266,26 +357,59 @@ exports.submitAttendance = async (req, res) => {
   session.startTransaction();
 
   try {
-    const { courseName, semId, subjectCode, date, attendance, specialization, section } = req.body;
+    const {
+      courseName,
+      semId,
+      subjectCode,
+      date,
+      attendance,
+      specialization,
+      section,
+      teacherId,
+    } = req.body;
 
     if (!courseName || !semId || !subjectCode || !date || !attendance) {
-      return res.status(400).json({ message: 'All fields are required' });
+      return res.status(400).json({ message: "All fields are required" });
+    }
+
+    // 1️⃣ Validate teacher access
+    let teacherName = "Unknown";
+    if (teacherId) {
+      const teacher = await Teacher.findById(teacherId).lean();
+      if (!teacher) {
+        return res.status(404).json({ message: "Teacher not found" });
+      }
+
+      teacherName = teacher.name;
+
+      const hasAllAccess =
+        teacher.subjectAccess.length === 1 &&
+        teacher.subjectAccess[0].subjectCode === "all";
+
+      const hasSubjectAccess =
+        hasAllAccess || teacher.subjectAccess.some(s => s.subjectCode === subjectCode);
+
+      if (!hasSubjectAccess) {
+        return res
+          .status(403)
+          .json({ message: "You can’t mark attendance for this subject" });
+      }
     }
 
     const course = await Course.findOne({ Course_Name: courseName });
     const courseId = course ? course.Course_Id : null;
     const academicYear = getCurrentAcademicYear();
 
-    // 1️⃣ Validate students in bulk
+    // 2️⃣ Validate students in bulk
     const validStudents = await Student.find({
       _id: { $in: attendance.map(a => a.studentId) },
       ...(specialization ? { specializations: { $in: [specialization] } } : {}),
-      ...(section ? { section } : {})
+      ...(section ? { section } : {}),
     }).session(session);
 
     const validStudentIds = new Set(validStudents.map(s => s._id.toString()));
 
-    // 2️⃣ Bulk insert into Attendance
+    // 3️⃣ Bulk insert/update Attendance
     const attendanceOps = attendance
       .filter(r => validStudentIds.has(r.studentId.toString()))
       .map(r => ({
@@ -293,17 +417,36 @@ exports.submitAttendance = async (req, res) => {
           filter: { studentId: r.studentId, subjectCode },
           update: {
             $setOnInsert: { studentId: r.studentId, subjectCode },
-            $push: { records: { date: new Date(date), present: r.present } }
+            // Prevent duplicate date: pull existing record for same date
+            $pull: { records: { date: new Date(date) } },
           },
-          upsert: true
-        }
-      }));
+          upsert: true,
+        },
+      }))
+      .concat(
+        attendance
+          .filter(r => validStudentIds.has(r.studentId.toString()))
+          .map(r => ({
+            updateOne: {
+              filter: { studentId: r.studentId, subjectCode },
+              update: {
+                $push: {
+                  records: {
+                    date: new Date(date),
+                    present: r.present,
+                    markedBy: teacherName, // ✅ store per record
+                  },
+                },
+              },
+            },
+          }))
+      );
 
     if (attendanceOps.length > 0) {
       await Attendance.bulkWrite(attendanceOps, { session });
     }
 
-    // 3️⃣ Bulk insert/update AttendanceSummary
+    // 4️⃣ Bulk insert/update AttendanceSummary
     const summaryOps = attendance
       .filter(r => validStudentIds.has(r.studentId.toString()))
       .map(r => ({
@@ -312,10 +455,10 @@ exports.submitAttendance = async (req, res) => {
           update: {
             $inc: { totalClasses: 1, attendedClasses: r.present ? 1 : 0 },
             $set: { lastUpdated: new Date() },
-            $setOnInsert: { studentId: r.studentId, courseId, semId, subjectCode, academicYear }
+            $setOnInsert: { studentId: r.studentId, courseId, semId, subjectCode, academicYear },
           },
-          upsert: true
-        }
+          upsert: true,
+        },
       }));
 
     if (summaryOps.length > 0) {
@@ -324,15 +467,16 @@ exports.submitAttendance = async (req, res) => {
 
     await session.commitTransaction();
     session.endSession();
-    return res.status(201).json({ message: 'Attendance submitted successfully' });
 
+    return res.status(201).json({ message: "Attendance submitted successfully" });
   } catch (error) {
     await session.abortTransaction();
     session.endSession();
-    console.error('Error submitting attendance:', error);
-    return res.status(500).json({ message: 'Server error' });
+    console.error("Error submitting attendance:", error);
+    return res.status(500).json({ message: "Server error" });
   }
 };
+
 
 
 // Get attendance by course, semester, subject, and academic year with optional filters
@@ -482,7 +626,8 @@ exports.getStudentAttendanceDetail = async (req, res) => {
     const formattedRecords = filteredRecords
       .map(record => ({
         date: record.date,
-        present: record.present
+        present: record.present,
+        markedBy: record.markedBy || "-"   
       }))
       .sort((a, b) => new Date(a.date) - new Date(b.date));
 
@@ -496,7 +641,6 @@ exports.getStudentAttendanceDetail = async (req, res) => {
     });
   }
 };
-
 
   
   // Get student information

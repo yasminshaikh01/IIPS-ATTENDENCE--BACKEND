@@ -13,9 +13,9 @@ router.post("/getAttendanceByCourseAndSubject",getAttendanceByCourseAndSubject);
 router.post('/getsubjects', getSubjects);
 router.post('/sendLowAttendanceNotifications', sendLowAttendanceNotifications);
 router.post('/markSingleAttendance', markSingleAttendance);
-router.get('/', getCourses);
+router.post('/', getCourses);
 router.get('/:id', getCourseById);
-router.get('/:courseId/semesters', getCourseSemesters);
+router.get('/:courseId/:teacherId/semesters', getCourseSemesters);
 router.post('/getspecializations',getSpecializations);
 
 module.exports = router;
